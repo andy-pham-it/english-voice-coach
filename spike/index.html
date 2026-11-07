@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Gemini Live API — Spike</title>
+<style>
+  :root {
+    --bg: #0b0d10;
+    --panel: #14181d;
+    --line: #242b33;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #4ade80;
+    --danger: #f87171;
+    --warn: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    padding: 16px; max-width: 720px; margin: 0 auto;
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+  .warn {
+    background: rgba(251,191,36,.1); border: 1px solid rgba(251,191,36,.35);
+    color: var(--warn); padding: 10px 12px; border-radius: 8px;
+    font-size: 12px; margin-bottom: 16px;
+  }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px; margin-bottom: 12px;
+  }
+  label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  input, select, button, textarea {
+    font: inherit; color: var(--text); background: #0e1216;
+    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; width: 100%;
+  }
+  button { cursor: pointer; background: #1b2229; }
+  button:hover { background: #222b34; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .row.tight > * { flex: 0 0 auto; }
+  #connect { background: #16a34a; border-color: #15803d; font-weight: 600; }
+  #connect.on { background: #b91c1c; border-color: #991b1b; }
+  #talk {
+    height: 96px; font-size: 16px; font-weight: 600; border-radius: 14px;
+    background: #1f2937; transition: background .12s;
+  }
+  #talk.live { background: #dc2626; border-color: #b91c1c; }
+  #status { font-size: 12px; color: var(--muted); min-height: 18px; margin-top: 8px; }
+  #status.ok { color: var(--accent); }
+  #status.err { color: var(--danger); }
+  #transcript { max-height: 40vh; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { padding: 8px 10px; border-radius: 8px; font-size: 13px; white-space: pre-wrap; }
+  .bubble.user { background: #1e293b; align-self: flex-end; max-width: 88%; }
+  .bubble.ai { background: #0f2a1d; align-self: flex-start; max-width: 88%; }
+  .bubble .tag { display: block; font-size: 10px; color: var(--muted); margin-bottom: 3px; }
+  #metrics { display: flex; gap: 16px; font-size: 12px; color: var(--muted); }
+  #metrics b { color: var(--text); font-variant-numeric: tabular-nums; }
+  #log {
+    font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #7d8b99; max-height: 22vh; overflow: auto; white-space: pre-wrap;
+    background: #0a0d10; border-radius: 8px; padding: 8px; margin-top: 8px;
+  }
+  details summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<h1>Gemini Live API — Spike</h1>
+<div class="sub">Mục đích: đo độ trễ, chất lượng hội thoại, và mức tiêu quota. Không phải code sản phẩm.</div>
+
+<div class="warn">
+  Key nằm trong trình duyệt là key bị lộ. Dùng key tạm, đừng deploy file này lên đâu cả.
+  Nếu key đã từng dán vào đâu khác, tạo key mới trong AI Studio.
+</div>
+
+<div class="panel">
+  <label for="key">API key</label>
+  <input id="key" type="password" placeholder="AIza..." autocomplete="off" />
+  <div class="hint">Chỉ lưu trong sessionStorage của tab này. Đóng tab là mất.</div>
+
+  <div style="height:10px"></div>
+  <label for="model">Model</label>
+  <div class="row">
+    <select id="model">
+      <option value="gemini-3.8-live">gemini-3.8-live</option>
+      <option value="gemini-3.1-flash-live-preview">gemini-3.1-flash-live-preview</option>
+      <option value="gemini-2.5-flash-native-audio-latest">gemini-2.5-flash-native-audio-latest</option>
+      <option value="gemini-3.8-live-extended-thinking">gemini-3.8-live-extended-thinking</option>
+      <option value="gemini-3.5-live-translate-preview">gemini-3.5-live-translate-preview</option>
+    </select>
+    <button id="list" style="flex:0 0 auto; width:auto">Tìm model</button>
+  </div>
+  <div class="hint">Tên model hay đổi. Bấm "Tìm model" để lấy danh sách thật từ tài khoản của bạn.</div>
+
+  <div style="height:10px"></div>
+  <label for="voice">Giọng</label>
+  <select id="voice">
+    <option>Puck</option><option>Charon</option><option>Kore</option>
+    <option>Fenrir</option><option>Aoede</option><option>Leda</option>
+  </select>
+
+  <div style="height:10px"></div>
+  <label for="silence">Chờ bao lâu mới coi là hết câu</label>
+  <select id="silence">
+    <option value="500">0.5s — mặc định, hay cắt lời</option>
+    <option value="900">0.9s</option>
+    <option value="1300" selected>1.3s — cân bằng</option>
+    <option value="1800">1.8s — rất kiên nhẫn</option>
+  </select>
+  <div class="hint">Đổi xong phải Ngắt rồi Kết nối lại.</div>
+
+  <div style="height:12px"></div>
+  <button id="connect">Kết nối</button>
+  <div id="status">chưa kết nối</div>
+</div>
+
+<div class="panel">
+  <button id="talk">Giữ để nói</button>
+  <div class="hint">
+    Giữ nút rồi nói. Thả ra để AI trả lời.
+    Bật "luôn mở mic" bên dưới để thử nói chen ngang (điểm mạnh thật của Live API).
+  </div>
+  <div class="hint" style="color:var(--warn)">
+    Full-duplex bắt buộc dùng tai nghe. Loa ngoài sẽ khiến AI nghe chính nó và tự cắt lời.
+  </div>
+  <div style="height:8px"></div>
+  <label style="display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; font-size:12px; color:var(--text)">
+    <input type="checkbox" id="openMic" style="width:auto" /> Luôn mở mic (full-duplex)
+  </label>
+  <label style="display:flex; gap:8px; align-items:center; text-transform:none; letter-spacing:0; font-size:12px; color:var(--text); margin-top:6px">
+    <input type="checkbox" id="viExplain" style="width:auto" /> Giải thích lỗi bằng tiếng Việt
+  </label>
+  <div class="hint">Đổi xong phải Ngắt rồi Kết nối lại (system instruction chỉ gửi lúc setup).</div>
+</div>
+
+<div class="panel">
+  <div style="font-size:12px; font-weight:600; margin-bottom:8px">Bộ đo T1 / T3 / V1 — một phiên ra cả ba</div>
+  <label for="tCanary">Canary (T3 — nhét vào system prompt)</label>
+  <input id="tCanary" value="My project codename is Bluebird. I work on SRS streaming." />
+  <div style="height:8px"></div>
+  <div class="row">
+    <div>
+      <label for="tProbeMin">Hỏi lại ở phút</label>
+      <input id="tProbeMin" type="number" min="3" max="60" value="15" />
+    </div>
+    <div>
+      <label for="tProbeExpect">Đáp án đúng chứa</label>
+      <input id="tProbeExpect" value="Bluebird" />
+    </div>
+  </div>
+  <div style="height:8px"></div>
+  <label for="tWords">5 từ cần gieo (V1)</label>
+  <input id="tWords" value="mitigate, tradeoff, bottleneck, rollback, scope creep" />
+  <div style="height:10px"></div>
+  <div class="row">
+    <button id="tStart">Bắt đầu test</button>
+    <button id="tFinish">Kết thúc</button>
+    <button id="tCopy">Copy JSON</button>
+  </div>
+  <div id="tSummary" class="hint">Chưa chạy. Bấm "Bắt đầu test" TRƯỚC khi Kết nối để canary được nạp.</div>
+  <div class="hint">
+    Log tự đi: chạy local thì vào <code>.data/logs</code>; mở bản deploy thì ghi thẳng vào Neon.
+    Chỉ khi cả hai đều fail mới cần <b>Copy JSON</b>.
+  </div>
+  <div class="hint"><a href="#" id="tReset" style="color:var(--muted)">xoá lịch sử đo</a></div>
+</div>
+
+<div class="panel">
+  <div id="metrics">
+    <span>first audio: <b id="lat">—</b></span>
+    <span>turns: <b id="turns">0</b></span>
+    <span>audio in: <b id="secs">0s</b></span>
+  </div>
+  <div style="height:8px"></div>
+  <div id="transcript"></div>
+</div>
+
+<div class="panel">
+  <div class="row">
+    <input id="text" placeholder="Hoặc gõ text để test setup..." />
+    <button id="send" style="flex:0 0 auto; width:auto">Gửi</button>
+  </div>
+</div>
+
+<details>
+  <summary>Log kỹ thuật</summary>
+  <div id="log"></div>
+</details>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const keyEl = $('key'), modelEl = $('model'), voiceEl = $('voice');
+  const connectBtn = $('connect'), talkBtn = $('talk'), statusEl = $('status');
+  const transcriptEl = $('transcript'), logEl = $('log');
+  const latEl = $('lat'), turnsEl = $('turns'), secsEl = $('secs');
+
+  const HOST = 'generativelanguage.googleapis.com';
+  const PATH = '/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+
+  const SYSTEM_EN = [
+    'You are a friendly English speaking coach for a Vietnamese backend engineer at B1-B2 level.',
+    'Keep replies to 2-4 short sentences, natural spoken English. Never speak Vietnamese.',
+    'Correct at most ONE important mistake per turn, briefly, then continue the conversation.',
+    'Always end with a short question so the learner keeps talking.'
+  ].join(' ');
+
+  const SYSTEM_VI = [
+    'You are a friendly English speaking coach for a Vietnamese backend engineer at B1-B2 level.',
+    'ALWAYS speak English. The conversation itself is always in English, never in Vietnamese.',
+    'Keep replies to 2-4 short sentences, natural spoken English.',
+    'Correct at most TWO important mistakes per turn, then continue the conversation.',
+    'Correction format: say the wrong phrase, then the right phrase in English, then ONE short reason IN VIETNAMESE (max 12 words), for example:',
+    '"You said I have 4 years experience. Say I have 4 years of experience. Thiếu giới từ of trước danh từ."',
+    'The Vietnamese part is only the grammar reason. Do not translate the sentence. Do not explain in Vietnamese more than one sentence.',
+    'If the learner asks you to speak Vietnamese, keep answering in English and say briefly that you can explain rules in Vietnamese but practice stays in English.',
+    'Always end with a short question so the learner keeps talking.'
+  ].join(' ');
+
+  const buildSystem = () => {
+    let s = $('viExplain').checked ? SYSTEM_VI : SYSTEM_EN;
+    if (T.active && T.canary) {
+      s += '\n\nLEARNER CONTEXT you already know (never ask about it): ' + T.canary;
+    }
+    if (T.active && T.words.length) {
+      s += '\n\nTARGET VOCABULARY: weave these phrases into your own replies when the topic allows, at most twice each, in a natural sentence: '
+        + T.words.join(', ')
+        + '. Never announce this as a lesson, never list them, never tell the learner to use them.';
+    }
+    return s;
+  };
+
+  let ws = null;
+  let acIn = null, acOut = null, micStream = null, procNode = null, srcNode = null;
+  let muted = true;
+  let duplex = false;
+  let nextPlayTime = 0;
+  let queuedSources = [];
+  let lastChunkAt = 0, latencyPending = false, firstAudioDone = false;
+  let lastInputAt = 0;
+  let silenceUntil = 0;
+  let lastKeys = '';
+  let turnCount = 0, audioSeconds = 0, audioSentBytes = 0;
+  let userBubble = null, aiBubble = null, userBuf = '', aiBuf = '';
+
+  // ---------- trạng thái test harness ----------
+  const T = {
+    active: false, startedAt: 0, startedWall: null, timer: null,
+    canary: '', canaryExpect: '', probeMin: 15, probeQ: '',
+    probeSent: false, probeDone: false, probeAnswer: '', probeSentAt: 0,
+    words: [], latencies: [], earlyResponses: 0, bargeIns: 0,
+    wordFirstAiAt: {}, wordFirstUserAt: {},
+    turns: 0, userText: '', aiText: ''
+  };
+
+  const log = (...a) => {
+    const line = a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ');
+    logEl.textContent += line + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+    sendLog('console', { line });
+  };
+  const setStatus = (t, cls = '') => { statusEl.textContent = t; statusEl.className = cls; };
+
+  // ---------- log về server local ----------
+  // Chạy qua `node tools/dev-server.mjs` thì mọi sự kiện được ghi vào
+  // .data/logs/events-YYYY-MM-DD.jsonl, xem bằng `node tools/logs.mjs`.
+  // Chạy bằng file:// hoặc bản deploy thì fetch fail và bỏ qua im lặng.
+  let RUN_ID = null;
+  let logSent = 0, logFailed = 0;
+
+  function sendLog(name, data, keepalive = true) {
+    if (!RUN_ID) return;
+    const body = JSON.stringify({
+      kind: 'event', run_id: RUN_ID, name, data: data ?? null,
+      ts: new Date().toISOString()
+    });
+    // fetch keepalive giới hạn 64KB; event thì luôn nhỏ, chỉ run_end mới lớn.
+    try {
+      fetch('/__log', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body,
+        keepalive
+      }).then(r => { r.ok ? logSent++ : logFailed++; }).catch(() => { logFailed++; });
+    } catch { logFailed++; }
+  }
+
+  // Log đi đâu: ưu tiên server local (node tools/dev-server.mjs), không có thì
+  // gửi thẳng vào Neon qua app đã deploy. Key chỉ có quyền ghi, không đọc được
+  // log của người khác; chạy local thì không cần.
+  const SPIKE_LOG_URL = 'https://english-voice-coach-five.vercel.app/api/spike-log';
+  const SPIKE_LOG_KEY = '566eaff4347857e9549a6b2b5aaf307e';
+
+  async function postRun(out) {
+    if (!RUN_ID) return false;
+    try {
+      const r = await fetch('/__log', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'run_end', run_id: RUN_ID, ts: new Date().toISOString(), run: out })
+      });
+      if (r.ok) return true;
+    } catch { /* không có server local */ }
+    try {
+      const r = await fetch(SPIKE_LOG_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-spike-key': SPIKE_LOG_KEY },
+        body: JSON.stringify(out)
+      });
+      return r.ok;
+    } catch { return false; }
+  }
+
+  // ---------- base64 helpers ----------
+  const i16ToB64 = (i16) => {
+    const bytes = new Uint8Array(i16.buffer);
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(s);
+  };
+  const b64ToI16 = (b64) => {
+    const bin = atob(b64);
+    const out = new Int16Array(bin.length >> 1);
+    for (let i = 0; i < out.length; i++) {
+      out[i] = (bin.charCodeAt(i * 2) | (bin.charCodeAt(i * 2 + 1) << 8)) << 16 >> 16;
+    }
+    return out;
+  };
+
+  // ---------- model list ----------
+  $('list').onclick = async () => {
+    const key = keyEl.value.trim();
+    if (!key) return setStatus('cần API key trước', 'err');
+    setStatus('đang lấy danh sách model...');
+    try {
+      const found = new Map();
+      for (const v of ['v1beta', 'v1alpha']) {
+        const r = await fetch(`https://${HOST}/${v}/models?key=${encodeURIComponent(key)}&pageSize=200`);
+        if (!r.ok) { log('list', v, r.status); continue; }
+        const j = await r.json();
+        for (const m of j.models || []) {
+          const short = m.name.replace('models/', '');
+          if (/live|native-audio/i.test(short)) found.set(short, m);
+        }
+      }
+      if (!found.size) return setStatus('không thấy model live nào — key này có bật Live API chưa?', 'err');
+      modelEl.innerHTML = '';
+      for (const short of found.keys()) {
+        const o = document.createElement('option');
+        o.value = short; o.textContent = short;
+        modelEl.appendChild(o);
+      }
+      setStatus(`tìm thấy ${found.size} model live`, 'ok');
+      log('models:', [...found.keys()].join(', '));
+    } catch (e) {
+      setStatus('lỗi: ' + e.message, 'err');
+      log('list error', String(e));
+    }
+  };
+
+  // ---------- connection ----------
+  async function connect() {
+    const key = keyEl.value.trim();
+    if (!key) return setStatus('cần API key', 'err');
+
+    setStatus('đang kết nối...');
+    ws = new WebSocket(`wss://${HOST}${PATH}?key=${encodeURIComponent(key)}`);
+    ws.binaryType = 'arraybuffer';
+
+    ws.onopen = () => {
+      log('ws open');
+      const setup = {
+        setup: {
+          model: 'models/' + modelEl.value,
+          generationConfig: {
+            responseModalities: ['AUDIO'],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceEl.value } } }
+          },
+          systemInstruction: { parts: [{ text: buildSystem() }] },
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+          realtimeInputConfig: {
+            automaticActivityDetection: {
+              disabled: false,
+              startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
+              endOfSpeechSensitivity: 'END_SENSITIVITY_LOW',
+              prefixPaddingMs: 300,
+              silenceDurationMs: Number($('silence').value)
+            }
+          }
+        }
+      };
+      log('setup →', setup.setup.model);
+      log('explain mode:', $('viExplain').checked ? 'VI (lỗi giải thích tiếng Việt)' : 'EN only');
+      log('vad silence:', $('silence').value + 'ms');
+      ws.send(JSON.stringify(setup));
+    };
+
+    ws.onmessage = async (ev) => {
+      let text = ev.data;
+      if (text instanceof ArrayBuffer) text = new TextDecoder().decode(text);
+      else if (text instanceof Blob) text = await text.text();
+      let msg;
+      try { msg = JSON.parse(text); } catch { return log('raw', String(text).slice(0, 300)); }
+      handle(msg);
+    };
+
+    ws.onerror = (e) => { log('ws error', String(e)); sendLog('ws_error', { msg: String(e) }); setStatus('lỗi kết nối — xem log', 'err'); };
+    ws.onclose = (e) => {
+      log('ws close', e.code, e.reason || '');
+      sendLog('ws_close', { code: e.code, reason: e.reason || '' });
+      setStatus(`đã đóng (${e.code}) ${e.reason || ''}`, 'err');
+      cleanup();
+      connectBtn.textContent = 'Kết nối'; connectBtn.classList.remove('on');
+    };
+  }
+
+  function handle(msg) {
+    const keys = Object.keys(msg).join(',');
+    if (keys !== lastKeys) { log('←', keys); lastKeys = keys; }
+
+    if (msg.setupComplete) {
+      log('setupComplete');
+      sendLog('setup_complete', { model: modelEl.value });
+      setStatus('sẵn sàng — giữ nút để nói', 'ok');
+      connectBtn.textContent = 'Ngắt'; connectBtn.classList.add('on');
+      initAudioOut(); initAudioIn();
+      return;
+    }
+    if (msg.serverContent) {
+      const sc = msg.serverContent;
+
+      if (sc.inputTranscription?.text) {
+        lastInputAt = performance.now();
+        if (T.active) { T.userText += sc.inputTranscription.text; noteWordHits(sc.inputTranscription.text, 'user'); }
+        if (!userBubble) userBubble = newBubble('user', 'bạn');
+        userBuf += sc.inputTranscription.text;
+        userBubble.textContent = userBuf;
+        transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      }
+      if (sc.outputTranscription?.text) {
+        if (T.active) { T.aiText += sc.outputTranscription.text; noteWordHits(sc.outputTranscription.text, 'ai'); }
+        if (T.active && T.probeSent && !T.probeDone) T.probeAnswer += sc.outputTranscription.text;
+        if (!aiBubble) aiBubble = newBubble('ai', 'AI');
+        aiBuf += sc.outputTranscription.text;
+        aiBubble.textContent = aiBuf;
+        transcriptEl.scrollTop = transcriptEl.scrollHeight;
+      }
+
+      if (sc.interrupted) {
+        log('interrupted');
+        if (T.active) { T.bargeIns++; renderTestLive(); }
+        sendLog('barge_in', { turns: T.turns });
+        stopPlayback();
+        userBubble = null; aiBubble = null;
+        userBuf = ''; aiBuf = '';
+        return;
+      }
+
+      for (const part of sc.modelTurn?.parts || []) {
+        if (part.inlineData?.data) {
+          if (!firstAudioDone && latencyPending) {
+            firstAudioDone = true;
+            if (duplex) {
+              latEl.textContent = '— (duplex)';
+            } else {
+              const ms = Math.round(performance.now() - lastChunkAt);
+              latEl.textContent = ms + ' ms';
+              log('first audio', ms + 'ms (từ lúc thả nút)');
+              if (T.active) T.latencies.push(ms);
+            }
+            // AI trả lời khi anh CÒN đang giữ nút = VAD chốt câu quá sớm.
+            if (T.active && !duplex && !muted) {
+              T.earlyResponses++;
+              log('early response: AI nói khi vẫn đang giữ nút');
+              sendLog('early_response', { turns: T.turns });
+            }
+            sendLog('first_audio', { ms: duplex ? null : Math.round(performance.now() - lastChunkAt), duplex });
+            if (T.active) renderTestLive();
+            setStatus('AI đang nói', 'ok');
+          }
+          playPcm(part.inlineData.data, 24000);
+        }
+      }
+
+      if (sc.turnComplete) {
+        turnCount++; turnsEl.textContent = turnCount;
+        userBubble = null; aiBubble = null; userBuf = ''; aiBuf = '';
+        latencyPending = true; firstAudioDone = false; lastChunkAt = performance.now();
+        if (T.active) {
+          T.turns++;
+          if (T.probeSent && !T.probeDone) {
+            T.probeDone = true;
+            log('probe answer:', T.probeAnswer.slice(0, 200));
+            sendLog('probe_answer', { answer: T.probeAnswer.trim().slice(0, 500) });
+          }
+          renderTestLive();
+          sendLog('turn', { n: T.turns, user_chars: T.userText.length });
+        }
+      }
+      return;
+    }
+    if (msg.goAway) log('goAway', msg.goAway);
+  }
+
+  function newBubble(kind, tag) {
+    const d = document.createElement('div');
+    d.className = 'bubble ' + kind;
+    const t = document.createElement('span');
+    t.className = 'tag'; t.textContent = tag;
+    d.appendChild(t);
+    transcriptEl.appendChild(d);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    return d;
+  }
+
+  // ---------- audio out ----------
+  function initAudioOut() {
+    if (acOut) return;
+    acOut = new AudioContext({ sampleRate: 24000 });
+    nextPlayTime = acOut.currentTime;
+  }
+  function playPcm(b64, rate) {
+    if (!acOut) return;
+    const i16 = b64ToI16(b64);
+    const f32 = new Float32Array(i16.length);
+    for (let i = 0; i < i16.length; i++) f32[i] = i16[i] / 32768;
+    const buf = acOut.createBuffer(1, f32.length, rate);
+    buf.copyToChannel(f32, 0);
+    const src = acOut.createBufferSource();
+    src.buffer = buf; src.connect(acOut.destination);
+    const now = acOut.currentTime;
+    if (nextPlayTime < now + 0.02) nextPlayTime = now + 0.06;
+    src.start(nextPlayTime);
+    nextPlayTime += buf.duration;
+    queuedSources.push(src);
+    trimSources();
+  }
+  function stopPlayback() {
+    for (const s of queuedSources) { try { s.stop(); } catch {} }
+    queuedSources = [];
+    if (acOut) nextPlayTime = acOut.currentTime;
+  }
+  // dọn source đã phát xong để mảng không phình theo phiên dài
+  function trimSources() {
+    if (queuedSources.length < 40) return;
+    const now = acOut ? acOut.currentTime : 0;
+    queuedSources = queuedSources.filter(s => {
+      try { return s.buffer && s.buffer.duration > 0; } catch { return false; }
+    }).slice(-20);
+    void now;
+  }
+
+  // ---------- audio in ----------
+  const WORKLET = `
+    class CaptureProcessor extends AudioWorkletProcessor {
+      constructor() {
+        super();
+        this.buf = new Float32Array(512);
+        this.n = 0;
+      }
+      process(inputs) {
+        const ch = inputs[0] && inputs[0][0];
+        if (!ch) return true;
+        for (let i = 0; i < ch.length; i++) {
+          this.buf[this.n++] = ch[i];
+          if (this.n === this.buf.length) {
+            this.port.postMessage(this.buf.slice(0));
+            this.n = 0;
+          }
+        }
+        return true;
+      }
+    }
+    registerProcessor('capture', CaptureProcessor);
+  `;
+
+  // ---------- resample về 16kHz ----------
+  let rsPhase = 0;
+  function resampleTo16k(input, inRate) {
+    if (inRate === 16000) return input;
+    const ratio = inRate / 16000;
+    const out = new Float32Array(Math.max(1, Math.floor((input.length - rsPhase) / ratio)));
+    let pos = rsPhase, n = 0;
+    while (pos < input.length && n < out.length) {
+      const i = Math.floor(pos), frac = pos - i;
+      const s0 = input[i] ?? 0;
+      const s1 = input[i + 1] ?? s0;
+      out[n++] = s0 + (s1 - s0) * frac;
+      pos += ratio;
+    }
+    rsPhase = pos - input.length;
+    return n === out.length ? out : out.subarray(0, n);
+  }
+
+  function sendChunk(f32) {
+    if (!ws || ws.readyState !== 1) return;
+    const now = performance.now();
+    const silent = muted;
+    if (silent && now > silenceUntil) return;   // hết cửa sổ im lặng thì thôi
+
+    const pcm = silent ? new Float32Array(0) : resampleTo16k(f32, acIn ? acIn.sampleRate : 16000);
+    const i16 = new Int16Array(silent ? f32.length : pcm.length);
+    if (silent) {
+      i16.fill(0);                               // VAD cần thấy im lặng mới chốt câu
+    } else {
+      for (let i = 0; i < pcm.length; i++) {
+        const s = Math.max(-1, Math.min(1, pcm[i]));
+        i16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      audioSentBytes += i16.byteLength;
+      audioSeconds = audioSentBytes / 32000;
+      secsEl.textContent = Math.round(audioSeconds) + 's';
+      lastChunkAt = now;
+    }
+
+    ws.send(JSON.stringify({
+      realtimeInput: { audio: { mimeType: 'audio/pcm;rate=16000', data: i16ToB64(i16) } }
+    }));
+  }
+
+  async function initAudioIn() {
+    if (acIn) return;
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+    } catch (e) {
+      log('mic error', String(e));
+      setStatus('không lấy được micro — dùng localhost/HTTPS và cấp quyền', 'err');
+      return;
+    }
+    acIn = new AudioContext({ sampleRate: 16000 });
+    srcNode = acIn.createMediaStreamSource(micStream);
+
+    try {
+      const url = URL.createObjectURL(new Blob([WORKLET], { type: 'application/javascript' }));
+      await acIn.audioWorklet.addModule(url);
+      URL.revokeObjectURL(url);
+      procNode = new AudioWorkletNode(acIn, 'capture');
+      procNode.port.onmessage = (e) => sendChunk(e.data);
+      log('audio in: worklet, 512-sample chunks (32ms)');
+    } catch (e) {
+      // Fallback cho trình duyệt không hỗ trợ worklet
+      log('worklet failed, falling back to ScriptProcessor', String(e));
+      procNode = acIn.createScriptProcessor(512, 1, 1);
+      procNode.onaudioprocess = (e) => sendChunk(e.inputBuffer.getChannelData(0));
+    }
+
+    const silent = acIn.createGain(); silent.gain.value = 0;
+    srcNode.connect(procNode);
+    procNode.connect(silent); silent.connect(acIn.destination);
+    log('mic ready', acIn.sampleRate + 'Hz');
+  }
+
+  // ---------- push to talk ----------
+  const startTalk = (e) => {
+    e.preventDefault();
+    if (duplex) return;                      // đang full-duplex thì nút này vô nghĩa
+    if (!ws || ws.readyState !== 1) return setStatus('chưa kết nối', 'err');
+    muted = false; talkBtn.classList.add('live'); talkBtn.textContent = 'Đang nghe...';
+  };
+  const endTalk = () => {
+    if (duplex || muted) return;
+    muted = true; talkBtn.classList.remove('live'); talkBtn.textContent = 'Giữ để nói';
+    // Giữ stream thêm 1.2s im lặng để VAD của server chốt câu.
+    silenceUntil = performance.now() + 1200;
+    latencyPending = true; firstAudioDone = false; lastChunkAt = performance.now();
+    setStatus('đang chờ AI...');
+    setTimeout(() => {
+      if (!firstAudioDone) {
+        log('cảnh báo: 8s không có audio trả về');
+        setStatus('không có phản hồi sau 8s — xem log', 'err');
+      }
+    }, 8000);
+  };
+  talkBtn.addEventListener('pointerdown', startTalk);
+  talkBtn.addEventListener('pointerup', endTalk);
+  talkBtn.addEventListener('pointercancel', endTalk);
+  talkBtn.addEventListener('pointerleave', endTalk);
+
+  $('openMic').addEventListener('change', (e) => {
+    duplex = e.target.checked;
+    if (duplex) {
+      if (!ws || ws.readyState !== 1) {
+        e.target.checked = false; duplex = false;
+        return setStatus('kết nối trước đã', 'err');
+      }
+      muted = false;
+      talkBtn.textContent = 'Mic đang mở — nói tự do';
+      talkBtn.classList.add('live');
+      setStatus('full-duplex: nói lúc nào cũng được, kể cả khi AI đang nói', 'ok');
+      log('duplex on');
+      initAudioIn();
+    } else {
+      if (!muted) endTalk();
+      talkBtn.textContent = 'Giữ để nói';
+      talkBtn.classList.remove('live');
+      log('duplex off');
+    }
+  });
+
+  // ---------- text fallback ----------
+  $('send').onclick = () => {
+    const t = $('text').value.trim();
+    if (!t || !ws || ws.readyState !== 1) return;
+    ws.send(JSON.stringify({ realtimeInput: { text: t } }));
+    $('text').value = '';
+    latencyPending = true; firstAudioDone = false; lastChunkAt = performance.now();
+  };
+
+  // ---------- test harness (T1 / T3 / V1) ----------
+  const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const norm = (s) => s.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ');
+  const wordRe = (w) => new RegExp('\\b' + escRe(w.toLowerCase()) + '\\b', 'g');
+
+  // Ghi mốc lần đầu mỗi từ xuất hiện ở mỗi phía, để biết AI gieo từ TRƯỚC
+  // khi người dùng dùng lại — nếu không thì chỉ là người dùng tự nói trước.
+  function noteWordHits(text, side) {
+    const now = performance.now();
+    const map = side === 'ai' ? T.wordFirstAiAt : T.wordFirstUserAt;
+    const t = norm(text);
+    for (const w of T.words) {
+      if (map[w] != null) continue;
+      if ((t.match(wordRe(w)) || []).length > 0) map[w] = now;
+    }
+  }
+
+  function startTest() {
+    T.active = true;
+    T.startedAt = performance.now();
+    T.startedWall = new Date().toISOString();
+    T.canary = $('tCanary').value.trim();
+    T.canaryExpect = $('tProbeExpect').value.trim();
+    T.probeMin = Math.max(1, Number($('tProbeMin').value) || 15);
+    T.words = $('tWords').value.split(',').map(s => s.trim()).filter(Boolean);
+    T.probeSent = T.probeDone = false;
+    T.probeAnswer = '';
+    T.latencies = []; T.earlyResponses = 0; T.bargeIns = 0;
+    T.wordFirstAiAt = {}; T.wordFirstUserAt = {};
+    T.turns = 0; T.userText = ''; T.aiText = '';
+    T.runId = 'r-' + Date.now().toString(36);
+    RUN_ID = T.runId;
+    sendLog('start', {
+      model: modelEl.value, mode: duplex ? 'duplex' : 'push_to_talk',
+      vad_silence_ms: Number($('silence').value), explain_vi: $('viExplain').checked,
+      probe_min: T.probeMin, canary_loaded: !!T.canary, words: T.words
+    });
+    if (T.timer) clearInterval(T.timer);
+    T.timer = setInterval(tickTest, 2000);
+    renderTestLive();
+    log('test started', { probeMin: T.probeMin, words: T.words.length, canary: !!T.canary });
+    if (ws && ws.readyState === 1) {
+      setStatus('test đã bật nhưng canary chưa nạp — Ngắt rồi Kết nối lại', 'err');
+      log('WARN: reconnect để canary vào system instruction');
+    }
+  }
+
+  function tickTest() {
+    if (!T.active) return;
+    renderTestLive();
+    const elapsedMin = (performance.now() - T.startedAt) / 60000;
+    if (!T.probeSent && elapsedMin >= T.probeMin) {
+      if (!ws || ws.readyState !== 1) { log('probe bỏ qua: chưa kết nối'); return; }
+      T.probeSent = true;
+      T.probeSentAt = performance.now();
+      T.probeAnswer = '';
+      ws.send(JSON.stringify({
+        realtimeInput: { text: 'Quick check, answer in one short sentence: what do you know about my project and my work?' }
+      }));
+      log('probe sent at', Math.round(elapsedMin) + 'min');
+      setStatus('đang kiểm tra trí nhớ (probe)...');
+    }
+  }
+
+  function renderTestLive() {
+    if (!T.active) return;
+    const el = Math.round((performance.now() - T.startedAt) / 1000);
+    const mm = String(Math.floor(el / 60)).padStart(2, '0');
+    const ss = String(el % 60).padStart(2, '0');
+    const ut = norm(T.userText);
+    const reuse = T.words.filter(w => (ut.match(wordRe(w)) || []).length > 0).length;
+    const sorted = [...T.latencies].sort((a, b) => a - b);
+    const p50 = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
+    $('tSummary').innerHTML =
+      `đang chạy <b>${mm}:${ss}</b> · lượt <b>${T.turns}</b> · PTT n=<b>${T.latencies.length}</b>` +
+      (p50 !== null ? ` (p50 <b>${p50}ms</b>)` : '') +
+      ` · cắt sớm <b>${T.earlyResponses}</b> · từ dùng lại <b>${reuse}/${T.words.length}</b>` +
+      (T.probeSent ? ' · <b>probe đã gửi</b>' : '');
+  }
+
+  function download(name, text) {
+    const blob = new Blob([text], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  async function finishTest() {
+    if (!T.active) return setStatus('chưa chạy test', 'err');
+    T.active = false;
+    if (T.timer) { clearInterval(T.timer); T.timer = null; }
+
+    const sorted = [...T.latencies].sort((a, b) => a - b);
+    const pick = (q) => sorted.length ? sorted[Math.min(sorted.length - 1, Math.round(q * (sorted.length - 1)))] : null;
+    const ut = norm(T.userText), at = norm(T.aiText);
+
+    const words = T.words.map(w => {
+      const re = wordRe(w);
+      const aiAt = T.wordFirstAiAt[w] ?? null, userAt = T.wordFirstUserAt[w] ?? null;
+      return {
+        word: w,
+        seeded_by_ai: (at.match(re) || []).length > 0,
+        seeded_first: aiAt != null && (userAt == null || aiAt < userAt),
+        used_by_user: (ut.match(re) || []).length
+      };
+    });
+    const reused = words.filter(w => w.used_by_user > 0).length;
+    const seededFirst = words.filter(w => w.seeded_first && w.used_by_user > 0).length;
+    const canaryHit = T.canaryExpect
+      ? norm(T.probeAnswer).includes(norm(T.canaryExpect))
+      : null;
+
+    const out = {
+      test: 'T1_latency / T3_memory_canary / V1_vocab_seeding',
+      run_id: RUN_ID,
+      started_at: T.startedWall,
+      finished_at: new Date().toISOString(),
+      duration_sec: Math.round((performance.now() - T.startedAt) / 1000),
+      model: modelEl.value,
+      mode: duplex ? 'duplex' : 'push_to_talk',
+      vad_silence_ms: Number($('silence').value),
+      explain_vi: $('viExplain').checked,
+      t1_latency_ms: {
+        n: sorted.length, p50: pick(0.5), p95: pick(0.95), raw: sorted,
+        pass: sorted.length >= 5 && pick(0.5) !== null && pick(0.5) < 1500
+      },
+      vad_early_responses: {
+        count: T.earlyResponses,
+        pass: T.earlyResponses === 0,
+        note: 'số lần AI bắt đầu nói khi người dùng còn đang giữ nút'
+      },
+      t3_canary: {
+        fact: T.canary,
+        expected: T.canaryExpect,
+        probe_minute: T.probeMin,
+        probe_sent: T.probeSent,
+        probe_answered: T.probeDone,
+        answer: T.probeAnswer.trim(),
+        pass: canaryHit
+      },
+      v1_vocab: { words, reused, seeded_first: seededFirst, pass: words.length > 0 && reused >= 2 && seededFirst >= 2 },
+      turns: T.turns,
+      barge_ins: T.bargeIns,
+      transcripts: { user: T.userText.trim(), ai: T.aiText.trim() }
+    };
+
+    // Ưu tiên gửi về server local (node tools/dev-server.mjs). Không có server
+    // thì fallback tải file như cũ.
+    const posted = await postRun(out);
+    if (!posted) {
+      download('test-' + String(T.startedWall || '').replace(/[:.]/g, '-') + '.json', JSON.stringify(out, null, 2));
+    }
+
+    // Gộp mọi lần chạy: T1 cần PTT, T3/V1 cần phiên dài — thường là 2 phiên khác nhau.
+    let all = [];
+    try { all = JSON.parse(localStorage.getItem('test_runs') || '[]'); } catch {}
+    all.push(out);
+    try { localStorage.setItem('test_runs', JSON.stringify(all)); } catch {}
+
+    const latest = (fn) => {
+      for (let i = all.length - 1; i >= 0; i--) { const v = fn(all[i]); if (v !== null && v !== undefined) return { run: all[i], value: v }; }
+      return null;
+    };
+    const t1 = latest(r => r.t1_latency_ms.n >= 5 ? r : null);
+    const t3 = latest(r => r.t3_canary.probe_answered ? r : null);
+    const v1 = latest(r => r.v1_vocab.words.length ? r : null);
+
+    const badge = (ok) => ok === true
+      ? '<span style="color:var(--accent)">ĐẠT</span>'
+      : ok === false
+        ? '<span style="color:var(--danger)">KHÔNG ĐẠT</span>'
+        : '<span style="color:var(--warn)">CHƯA ĐO</span>';
+
+    $('tSummary').innerHTML = [
+      `T1 latency: ${badge(t1?.value.t1_latency_ms.pass)} — ${t1 ? `n=${t1.value.t1_latency_ms.n}, p50=${t1.value.t1_latency_ms.p50}ms` : 'cần ≥5 lượt PTT (chế độ duplex không đo được)'}`,
+      `VAD cắt sớm: ${badge(t1?.value.vad_early_responses.pass)} — ${t1 ? t1.value.vad_early_responses.count + ' lần' : 'chưa đo'}`,
+      `T3 canary: ${badge(t3?.value.t3_canary.pass)} — ${t3 ? (t3.value.t3_canary.answer ? '“' + t3.value.t3_canary.answer.slice(0, 140) + '”' : 'probe không trả lời') : `cần phiên ≥${T.probeMin} phút`}`,
+      `V1 từ vựng: ${badge(v1?.value.v1_vocab.pass)} — ${v1 ? `dùng lại ${v1.value.v1_vocab.reused}/${v1.value.v1_vocab.words.length}, AI gieo trước ${v1.value.v1_vocab.seeded_first ?? '?'}/${v1.value.v1_vocab.words.length}` : 'chưa đo'}`,
+      `Đã lưu ${all.length} lần đo trong trình duyệt.` +
+      (posted ? ' Log đã gửi về server local — không cần tải file.' : ' Bấm <b>Copy JSON</b> rồi dán vào chat để mình đọc số.')
+    ].join('<br>');
+
+    log('test finished', { p50: out.t1_latency_ms.p50, canary: out.t3_canary.pass, reused, runs: all.length, posted });
+  }
+
+  $('tStart').onclick = startTest;
+  $('tFinish').onclick = finishTest;
+  // Trên điện thoại không POST được về localhost, nên đây là đường lấy log:
+  // copy JSON của mọi lần đo vào clipboard để dán thẳng vào chat.
+  $('tCopy').onclick = async () => {
+    let all = [];
+    try { all = JSON.parse(localStorage.getItem('test_runs') || '[]'); } catch {}
+    if (!all.length) return setStatus('chưa có lần đo nào để copy', 'err');
+    const text = JSON.stringify(all, null, 2);
+    const btn = $('tCopy');
+    try {
+      await navigator.clipboard.writeText(text);
+      btn.textContent = 'Đã copy ✓';
+    } catch {
+      download('tests-all.json', text);
+      btn.textContent = 'Đã tải file';
+    }
+    setTimeout(() => { btn.textContent = 'Copy JSON'; }, 2500);
+  };
+  $('tReset').onclick = (e) => {
+    e.preventDefault();
+    localStorage.removeItem('test_runs');
+    $('tSummary').textContent = 'Đã xoá lịch sử đo.';
+  };
+
+  // ---------- lifecycle ----------
+  function cleanup() {
+    try { micStream?.getTracks().forEach(t => t.stop()); } catch {}
+    try { procNode?.disconnect(); srcNode?.disconnect(); } catch {}
+    try { acIn?.close(); } catch {}
+    try { acOut?.close(); } catch {}
+    micStream = procNode = srcNode = acIn = acOut = null;
+    queuedSources = []; ws = null;
+    duplex = false; muted = true; silenceUntil = 0;
+    $('openMic').checked = false;
+    talkBtn.textContent = 'Giữ để nói'; talkBtn.classList.remove('live');
+  }
+
+  connectBtn.onclick = () => {
+    if (ws) { try { ws.close(); } catch {} cleanup(); setStatus('đã ngắt'); connectBtn.textContent = 'Kết nối'; connectBtn.classList.remove('on'); return; }
+    connect();
+  };
+
+  // persist key for the tab only
+  keyEl.value = sessionStorage.getItem('gemini_key') || '';
+  keyEl.addEventListener('input', () => sessionStorage.setItem('gemini_key', keyEl.value));
+})();
+</script>
+</body>
+</html>

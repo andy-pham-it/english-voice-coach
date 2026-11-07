@@ -1,0 +1,48 @@
+{
+  "dependencies": {
+    "@neon/config": "^1.11.3",
+    "@neon/env": "^1.6.15",
+    "@neondatabase/serverless": "^1.2.0",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.16",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@google/genai": "^3.0.0",
+    "@hono/vite-dev-server": "^0.26.1",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "drizzle-kit": "^0.31.11",
+    "pg": "^8.23.1",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  },
+  "name": "english-voice-coach",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:spike": "node tools/dev-server.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "tsx tools/seed-dev.ts",
+    "verify:brief": "tsx tools/verify-brief.ts",
+    "verify:live": "tsx tools/verify-live.ts",
+    "verify:token": "tsx tools/verify-token.mjs",
+    "verify:extract": "tsx tools/verify-extract.ts",
+    "verify:api": "tsx tools/verify-api.ts",
+    "db:reset": "tsx tools/reset-dev.ts"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}

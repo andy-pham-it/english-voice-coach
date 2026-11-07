@@ -1,0 +1,102 @@
+export interface Recap {
+  mistakes: Array<{ pattern: string; wrong: string; right: string; count: number; lastSeen: string }>;
+  dueVocab: string[];
+}
+
+export interface StartResult {
+  resumed: boolean;
+  session: { id: number; topic: string | null; brief: string | null; briefTokens: number | null };
+  brief: string;
+  briefTokens: number;
+  recap: Recap;
+  live: { token: string; socket: string; expiresAt: string };
+  model: string;
+}
+
+export interface ContextResult {
+  profile: string;
+  brief: string | null;
+  briefTokens: number | null;
+  briefSessionId: number | null;
+  mistakes: Array<{ id: number; pattern: string; wrong: string; right: string; count: number; lastSeen: string }>;
+  dueVocab: Array<{ id: number; phrase: string; example: string | null; count: number }>;
+  week: { minutes: number; sessions: number };
+  today: { audioSec: number; tokens: number; extractRequests: number };
+}
+
+export interface TurnEvent {
+  role: 'user' | 'assistant';
+  text: string;
+  audioMs?: number;
+  createdAt: string;
+}
+
+export interface CorrectionItem {
+  wrong: string;
+  right: string;
+  pattern: string;
+  note: string;
+}
+
+export interface EndResult {
+  sessionId: number;
+  status: string;
+  durationSec: number;
+  alreadyEnded: boolean;
+  summary: string | null;
+  topic: string | null;
+  extract: 'done' | 'failed' | 'timeout' | 'skipped';
+  corrections: number;
+  items?: CorrectionItem[];
+  phrases?: string[];
+  error?: string;
+}
+
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+  ) {
+    super(code);
+  }
+}
+
+async function req<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(path, {
+    ...init,
+    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    credentials: 'same-origin',
+  });
+  const text = await res.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new ApiError(res.status, body?.error ?? `http_${res.status}`);
+  return body as T;
+}
+
+export const api = {
+  authStatus: () => req<{ ok: boolean; auth: 'disabled' | 'enabled' }>('/api/auth/status'),
+  login: (code: string) => req<{ ok: boolean }>('/api/auth', { method: 'POST', body: JSON.stringify({ code }) }),
+  logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  start: (mode: 'duplex' | 'ptt') =>
+    req<StartResult>('/api/session/start', { method: 'POST', body: JSON.stringify({ mode }) }),
+  events: (id: number, payload: { turns?: TurnEvent[]; usage?: { audioSec?: number; tokens?: number } }) =>
+    req<{ ok: boolean }>(`/api/session/${id}/events`, { method: 'POST', body: JSON.stringify(payload) }),
+  rebrief: (id: number) =>
+    req<{ brief: string; brief_tokens: number; live: StartResult['live'] }>(`/api/session/${id}/rebrief`, {
+      method: 'POST',
+    }),
+  end: (id: number, durationSec: number) =>
+    req<EndResult & { ok?: boolean }>(`/api/session/${id}/end`, {
+      method: 'POST',
+      body: JSON.stringify({ durationSec }),
+    }),
+  extract: (id: number) =>
+    req<{ ok?: boolean; extract?: string; summary: string | null; topic?: string; corrections?: number; items?: CorrectionItem[]; phrases?: string[] }>(
+      `/api/session/${id}/extract`,
+      { method: 'POST' },
+    ),
+  context: () => req<ContextResult>('/api/context'),
+  saveProfile: (contentMd: string) =>
+    req<{ ok: boolean }>('/api/context/profile', { method: 'PUT', body: JSON.stringify({ contentMd }) }),
+  removeMistake: (id: number) => req<{ ok: boolean }>(`/api/mistakes/${id}`, { method: 'DELETE' }),
+};

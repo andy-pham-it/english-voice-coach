@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="English Voice Coach">
+  <rect width="512" height="512" rx="112" fill="#0d1117"/>
+  <rect x="206" y="120" width="100" height="176" rx="50" fill="#3fb950"/>
+  <path d="M166 268a90 90 0 0 0 180 0" fill="none" stroke="#e6edf3" stroke-width="24" stroke-linecap="round"/>
+  <path d="M256 358v52" stroke="#e6edf3" stroke-width="24" stroke-linecap="round"/>
+  <path d="M204 410h104" stroke="#e6edf3" stroke-width="24" stroke-linecap="round"/>
+</svg>
