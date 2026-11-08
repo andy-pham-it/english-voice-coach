@@ -25,6 +25,7 @@ start of session N+1: Postgres → brief (≤1000 tokens) → systemInstruction
 ```
 
 The brief is stored verbatim in `sessions.brief`, so the Context tab shows exactly what the model read.
+The History tab lists past sessions and expands each one into its corrections and full transcript.
 
 ## Stack
 
@@ -97,7 +98,7 @@ server/
   memory/brief.ts     profile + state + recall → brief
   extract/            prompt, zod schema, providers, apply
   session/service.ts  start / events / rebrief / end
-src/                  React client: Home, Session, Summary, Context
+src/                  React client: Home, Session, Summary, History, Context
 spike/index.html      measurement harness (T1 / T3 / V1), not shipped
 tools/                dev server, log queries, verification scripts
 drizzle/              generated SQL migrations

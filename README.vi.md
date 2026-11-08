@@ -25,6 +25,7 @@ cuối phiên N:    transcript → LLM trích xuất (Groq) → Postgres
 ```
 
 Brief được lưu nguyên văn vào `sessions.brief`, nên tab Context hiện đúng thứ model đã đọc.
+Tab History liệt kê các phiên cũ, mở ra xem lỗi đã sửa và toàn bộ transcript.
 
 ## Stack
 
@@ -96,7 +97,7 @@ server/
   memory/brief.ts     profile + state + recall → brief
   extract/            prompt, zod schema, providers, ghi DB
   session/service.ts  start / events / rebrief / end
-src/                  React client: Home, Session, Summary, Context
+src/                  React client: Home, Session, Summary, History, Context
 spike/index.html      bộ đo T1 / T3 / V1, không ship
 tools/                dev server, truy vấn log, script verify
 drizzle/              migration SQL đã sinh
