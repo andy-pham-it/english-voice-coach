@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError, type ContextResult, type EndResult, type StartResult, type TurnEvent } from './api';
+import { api, ApiError, type ContextResult, type EndResult, type SessionDetail, type SessionListItem, type StartResult, type TurnEvent } from './api';
 import { LiveSession, type LiveStatus } from './live';
 
-type View = 'home' | 'session' | 'summary' | 'context';
+type View = 'home' | 'session' | 'summary' | 'context' | 'history';
 
 const fmtTime = (sec: number): string =>
   `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
@@ -42,9 +42,9 @@ export default function App() {
   return (
     <div className="app">
       <nav className="tabs">
-        {(['home', 'context'] as const).map((v) => (
+        {(['home', 'history', 'context'] as const).map((v) => (
           <button key={v} className={view === v ? 'tab on' : 'tab'} onClick={() => setView(v)}>
-            {v === 'home' ? 'Home' : 'Context'}
+            {v === 'home' ? 'Home' : v === 'history' ? 'History' : 'Context'}
           </button>
         ))}
         {view === 'session' && <span className="tab on">Session</span>}
@@ -66,6 +66,8 @@ export default function App() {
       {view === 'session' && <Session onFinished={() => { setView('summary'); void loadContext(); }} />}
 
       {view === 'summary' && <Summary onContext={() => setView('context')} onHome={() => setView('home')} />}
+
+      {view === 'history' && <History />}
 
       {view === 'context' && ctx && (
         <Context ctx={ctx} reload={loadContext} />
@@ -387,7 +389,17 @@ function Summary({ onContext, onHome }: { onContext: () => void; onHome: () => v
     }
   };
 
-  const pending = data ? data.extract !== 'done' : false;
+  const pending = data ? data.extract !== 'done' && data.extract !== 'skipped' : false;
+
+  // Tự chạy lại một lần khi lần end trước timeout/fail, để người dùng không
+  // phải bấm "Phân tích lại". Chỉ một lần: không đốt request LLM lặp lại.
+  const autoRan = useRef(false);
+  useEffect(() => {
+    if (autoRan.current || !id || !pending) return;
+    autoRan.current = true;
+    void retry();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <main className="stack">
@@ -520,6 +532,119 @@ function Context({ ctx, reload }: { ctx: ContextResult; reload: () => Promise<vo
           {ctx.dueVocab.map((v) => (
             <li key={v.id}>
               <b>{v.phrase}</b> <span className="hint">×{v.count}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </main>
+  );
+}
+
+const fmtDate = (iso: string): string =>
+  new Date(iso).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+const fmtMinutes = (sec: number | null): string => (sec ? `${Math.max(1, Math.round(sec / 60))} phút` : '');
+
+function History() {
+  const [items, setItems] = useState<SessionListItem[] | null>(null);
+  const [error, setError] = useState('');
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<SessionDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .listSessions(30)
+      .then((r) => {
+        if (!cancelled) setItems(r.sessions);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : 'không tải được lịch sử');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const open = async (id: number) => {
+    if (openId === id) {
+      setOpenId(null);
+      setDetail(null);
+      return;
+    }
+    setOpenId(id);
+    setDetail(null);
+    setError('');
+    setLoading(true);
+    try {
+      setDetail(await api.sessionDetail(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'không tải được phiên');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const corrections = detail?.turns.flatMap((t) => t.corrections ?? []) ?? [];
+
+  return (
+    <main className="stack">
+      <section className="card">
+        <h1>Lịch sử</h1>
+        {error && <p className="error">{error}</p>}
+        {items === null && !error && <p className="hint">đang tải…</p>}
+        {items?.length === 0 && <p className="hint">chưa có phiên nào</p>}
+
+        <ul className="list">
+          {items?.map((s) => (
+            <li key={s.id}>
+              <button className="link" onClick={() => void open(s.id)}>
+                {openId === s.id ? '▾' : '▸'} {fmtDate(s.startedAt)}
+                {s.topic ? ` · ${s.topic}` : ' · chưa rõ chủ đề'}
+              </button>
+              <div className="hint">
+                {fmtMinutes(s.durationSec)}
+                {fmtMinutes(s.durationSec) ? ' · ' : ''}
+                {s.corrections} lỗi
+                {s.status === 'active' ? ' · đang mở' : ''}
+              </div>
+              {s.summary && openId !== s.id && <div className="hint">{s.summary}</div>}
+
+              {openId === s.id && (
+                <div>
+                  {loading && <p className="hint">đang tải phiên…</p>}
+                  {detail?.id === s.id && (
+                    <>
+                      {detail.summary && <p>{detail.summary}</p>}
+                      {corrections.length > 0 && (
+                        <>
+                          <h2>Lỗi đã sửa</h2>
+                          <ul className="list">
+                            {corrections.map((c, i) => (
+                              <li key={i}>
+                                <s>{c.wrong}</s> → {c.right}
+                                <div className="hint">
+                                  {c.pattern}
+                                  {c.note ? ` · ${c.note}` : ''}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
+                      )}
+                      <h2>Transcript</h2>
+                      <div className="transcript">
+                        {detail.turns.map((t) => (
+                          <p key={t.id} className={t.role === 'user' ? 'bubble user' : 'bubble ai'}>
+                            {t.text}
+                          </p>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>

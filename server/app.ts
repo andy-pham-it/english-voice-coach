@@ -6,6 +6,7 @@ import { env } from './env.js';
 import { getDb } from './db/index.js';
 import { spikeRuns } from './db/schema.js';
 import { extractAndStore } from './extract/run.js';
+import { getSessionDetail, listSessions } from './session/history.js';
 import {
   appendEvents,
   deactivateMistake,
@@ -135,6 +136,8 @@ export function createApp() {
   app.use('/api/session/*', requireAuth);
   app.use('/api/context', requireAuth);
   app.use('/api/context/*', requireAuth);
+  app.use('/api/sessions', requireAuth);
+  app.use('/api/sessions/*', requireAuth);
   app.use('/api/mistakes/*', requireAuth);
 
   app.post('/api/session/start', async (c) => {
@@ -212,6 +215,28 @@ export function createApp() {
         items: result.extraction.corrections,
         phrases: result.extraction.new_phrases,
       });
+    } catch (error) {
+      return fail(c, error);
+    }
+  });
+
+  // History: chỉ đọc dữ liệu đã lưu, không tốn request LLM.
+  app.get('/api/sessions', async (c) => {
+    const raw = Number(c.req.query('limit'));
+    const limit = Number.isInteger(raw) && raw > 0 && raw <= 100 ? raw : 20;
+    try {
+      return c.json({ sessions: await listSessions(getDb(), limit) });
+    } catch (error) {
+      return fail(c, error);
+    }
+  });
+
+  app.get('/api/sessions/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'invalid_session_id' }, 400);
+    try {
+      const detail = await getSessionDetail(getDb(), id);
+      return detail ? c.json(detail) : c.json({ error: 'not_found' }, 404);
     } catch (error) {
       return fail(c, error);
     }

@@ -161,7 +161,30 @@ try {
     JSON.stringify(eventsBody),
   );
 
-  // 9. rebrief
+  // 9. history: chỉ đọc, không tốn LLM
+  const list = await call('/api/sessions?limit=5', {}, cookie);
+  const listBody = await list.json();
+  check(
+    'sessions list 200 + chứa phiên hiện tại',
+    list.status === 200 && listBody.sessions?.some((s: { id: number }) => s.id === sessionId),
+    `${listBody.sessions?.length ?? 0} phiên`,
+  );
+
+  const detail = await call(`/api/sessions/${sessionId}`, {}, cookie);
+  const detailBody = await detail.json();
+  check(
+    'session detail trả transcript',
+    detail.status === 200 && detailBody.turns?.length === 2,
+    `${detailBody.turns?.length ?? 0} turn`,
+  );
+
+  const ghostDetail = await call('/api/sessions/999999999', {}, cookie);
+  check('session detail lạ → 404', ghostDetail.status === 404);
+
+  const listNoAuth = await call('/api/sessions');
+  check('sessions thiếu cookie → 401', listNoAuth.status === 401);
+
+  // 10. rebrief
   const rebrief = await call(`/api/session/${sessionId}/rebrief`, { method: 'POST' }, cookie);
   const rebriefBody = await rebrief.json();
   check(

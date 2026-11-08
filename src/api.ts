@@ -52,6 +52,32 @@ export interface EndResult {
   error?: string;
 }
 
+export interface SessionListItem {
+  id: number;
+  topic: string | null;
+  summary: string | null;
+  status: string;
+  mode: string | null;
+  startedAt: string;
+  durationSec: number | null;
+  corrections: number;
+}
+
+export interface SessionTurn {
+  id: number;
+  role: 'user' | 'assistant';
+  text: string;
+  corrections: CorrectionItem[] | null;
+  createdAt: string;
+}
+
+export interface SessionDetail extends SessionListItem {
+  endedAt: string | null;
+  brief: string | null;
+  briefTokens: number | null;
+  turns: SessionTurn[];
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -96,6 +122,8 @@ export const api = {
       { method: 'POST' },
     ),
   context: () => req<ContextResult>('/api/context'),
+  listSessions: (limit = 20) => req<{ sessions: SessionListItem[] }>(`/api/sessions?limit=${limit}`),
+  sessionDetail: (id: number) => req<SessionDetail>(`/api/sessions/${id}`),
   saveProfile: (contentMd: string) =>
     req<{ ok: boolean }>('/api/context/profile', { method: 'PUT', body: JSON.stringify({ contentMd }) }),
   removeMistake: (id: number) => req<{ ok: boolean }>(`/api/mistakes/${id}`, { method: 'DELETE' }),
