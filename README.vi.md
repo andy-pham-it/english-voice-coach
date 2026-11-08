@@ -116,3 +116,6 @@ drizzle/              migration SQL đã sinh
   khi cuộc nói chuyện đổi chủ đề.
 - Correction được trích xuất sau phiên, không phải ngay lúc đang nói.
 - Ephemeral token hết hạn sau 30 phút; nối lại sẽ cấp token mới.
+- Phiên bị rớt (đóng tab, khoá máy) sẽ được nối tiếp nếu bạn quay lại trong 15 phút: đồng hồ
+  chạy tiếp từ lúc bắt đầu nên `durationSec` vẫn đúng. Quá 15 phút thì phiên bị đánh dấu
+  `abandoned` và thời lượng bị cắt ở mức 15 phút, để một phiên bỏ quên không làm sai thống kê tuần.

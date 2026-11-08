@@ -117,3 +117,7 @@ drizzle/              generated SQL migrations
   reconnects with a fresh brief when the conversation drifts.
 - Corrections are extracted after the session, not while speaking.
 - Ephemeral tokens expire after 30 minutes; a reconnect issues a new one.
+- A session dropped by accident (tab closed, phone locked) is resumed if you come back within
+  15 minutes: the timer continues from the original start, so `durationSec` stays honest. After
+  that it is marked `abandoned` and capped at the window length, so one forgotten session cannot
+  distort the weekly stats.
