@@ -152,6 +152,7 @@ export function createApp() {
       return c.json({
         session_id: result.session.id,
         resumed: result.resumed,
+        started_at: result.session.startedAt.toISOString(),
         topic: result.session.topic,
         brief: result.brief,
         brief_tokens: result.briefTokens,

@@ -208,6 +208,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
   const [rebriefing, setRebriefing] = useState(false);
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resumed, setResumed] = useState(false);
 
   const liveRef = useRef<LiveSession | null>(null);
   const startedRef = useRef<{ id: number; model: string } | null>(null);
@@ -275,8 +276,14 @@ function Session({ onFinished }: { onFinished: () => void }) {
       if (cancelled) return;
       const sessionId = started.session_id;
       if (!Number.isInteger(sessionId)) throw new Error('server không trả session_id');
+      // Nối lại phiên cũ: đồng hồ trên máy bắt đầu từ 0, nhưng phiên đã chạy
+      // được một lúc rồi. Lấy started_at để hiển thị và để `end` ghi đúng
+      // durationSec, không ghi 0 giây cho một phiên 20 phút.
+      const elapsed = started.started_at ? Math.round((Date.now() - Date.parse(started.started_at)) / 1000) : 0;
+      if (Number.isFinite(elapsed) && elapsed > 0) setSeconds(elapsed);
       startedRef.current = { id: sessionId, model: started.model };
       sessionStorage.setItem('session_id', String(sessionId));
+      setResumed(started.resumed);
       connect(started);
     })().catch((e) => setError(e instanceof Error ? e.message : 'không kết nối được'));
 
@@ -370,7 +377,13 @@ function Session({ onFinished }: { onFinished: () => void }) {
             {l.text}
           </p>
         ))}
-        {lines.length === 0 && <p className="hint">Bắt đầu nói khi trạng thái là “sẵn sàng”.</p>}
+        {lines.length === 0 && (
+          <p className="hint">
+            {resumed
+              ? 'Đang nối lại phiên trước (trong vòng 15 phút). Cứ nói tiếp, transcript cũ vẫn được giữ.'
+              : 'Bắt đầu nói khi trạng thái là “sẵn sàng”.'}
+          </p>
+        )}
       </div>
 
       <label className="switch">

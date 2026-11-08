@@ -9,7 +9,6 @@ import { extractAndStore } from '../extract/run.js';
 import { learnerProfile } from '../db/schema.js';
 
 export const RESUME_WINDOW_MS = 15 * 60 * 1000;
-export const ABANDON_WINDOW_MS = 30 * 60 * 1000;
 /** Bước trích xuất có thể chậm (free tier 503 + đổi model); quá hạn thì để pending. */
 export const EXTRACT_TIMEOUT_MS = 30_000;
 
@@ -110,10 +109,16 @@ export async function startSession(
         model: active.liveModel ?? LIVE_MODEL,
       };
     }
-    // Cũ hơn cửa sổ resume: đóng lại để không có hai session active.
+    // Cũ hơn cửa sổ resume: đóng lại để không có hai session active. Không ghi
+    // cả khoảng cách thật (có thể vài ngày nếu bỏ dở lâu) — cắt ở cửa sổ resume
+    // để thống kê không bị một phiên bỏ dở làm sai lệch.
     await db
       .update(sessions)
-      .set({ status: 'abandoned', endedAt: new Date(), durationSec: Math.round(age / 1000) })
+      .set({
+        status: 'abandoned',
+        endedAt: new Date(),
+        durationSec: Math.min(Math.round(age / 1000), RESUME_WINDOW_MS / 1000),
+      })
       .where(eq(sessions.id, active.id));
   }
 

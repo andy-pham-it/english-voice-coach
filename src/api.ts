@@ -9,6 +9,7 @@ export interface Recap {
 export interface StartResult {
   resumed: boolean;
   session_id: number;
+  started_at: string;
   topic: string | null;
   brief: string;
   brief_tokens: number;

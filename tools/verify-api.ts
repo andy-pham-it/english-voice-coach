@@ -143,7 +143,7 @@ try {
   // Hợp đồng client↔server: src/api.ts `StartResult` đọc đúng list key này.
   // Trước đây client đọc `session.id` trong khi server trả `session_id` →
   // session id undefined, cả phiên không được lưu mà không báo lỗi.
-  const START_KEYS = 'brief,brief_tokens,live,model,recap,resumed,session_id,topic';
+  const START_KEYS = 'brief,brief_tokens,live,model,recap,resumed,session_id,started_at,topic';
   const startKeys = Object.keys(startBody).sort().join(',');
   check('shape của start khớp src/api.ts StartResult', startKeys === START_KEYS, startKeys);
 
@@ -153,6 +153,12 @@ try {
   check(
     'start lần 2 → resume cùng session',
     resume.status === 200 && resumeBody.session_id === sessionId && resumeBody.resumed === true,
+  );
+  check(
+    'resume trả started_at của phiên cũ (client dùng để chỉnh đồng hồ)',
+    typeof resumeBody.started_at === 'string' &&
+      Math.abs(Date.parse(resumeBody.started_at) - Date.parse(startBody.started_at)) < 1000,
+    String(resumeBody.started_at),
   );
 
   // 8. events
