@@ -199,6 +199,9 @@ interface Line {
   createdAt: string;
 }
 
+/** Live API cắt socket sau khoảng 10-15 phút; cho phép cứu phiên 2 lần là đủ. */
+const MAX_AUTO_RECONNECT = 2;
+
 function Session({ onFinished }: { onFinished: () => void }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [status, setStatus] = useState<LiveStatus>('connecting');
@@ -209,6 +212,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
   const [ending, setEnding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const liveRef = useRef<LiveSession | null>(null);
   const startedRef = useRef<{ id: number; model: string } | null>(null);
@@ -217,6 +221,8 @@ function Session({ onFinished }: { onFinished: () => void }) {
   const linesRef = useRef<Line[]>([]);
   const lastRoleRef = useRef<'user' | 'assistant' | null>(null);
   const seqRef = useRef(1);
+  /** Số lần tự nối lại socket, số đang nối, và cờ "đã kết thúc" để không nối lại. */
+  const autoRef = useRef({ count: 0, busy: false, ended: false });
 
   linesRef.current = lines;
 
@@ -247,6 +253,28 @@ function Session({ onFinished }: { onFinished: () => void }) {
     }
   }, []);
 
+  /** Nối lại Live socket sau khi bị cắt: đẩy nốt turn đang chờ rồi xin token mới. */
+  const resumeLive = useCallback(
+    async (live: LiveSession) => {
+      const id = startedRef.current?.id;
+      if (!id || autoRef.current.busy) return;
+      autoRef.current.busy = true;
+      try {
+        await flush();
+        const { live: fresh } = await api.rebrief(id);
+        live.reconnect(fresh.socket, startedRef.current!.model);
+        setNotice('đã nối lại — cứ nói tiếp');
+        setError(null);
+      } catch (e) {
+        setNotice(null);
+        setError(e instanceof Error ? e.message : 'không nối lại được');
+      } finally {
+        autoRef.current.busy = false;
+      }
+    },
+    [flush],
+  );
+
   const connect = useCallback(
     (started: StartResult) => {
       const live = new LiveSession({
@@ -258,12 +286,26 @@ function Session({ onFinished }: { onFinished: () => void }) {
         onAiText: (t) => append('assistant', t),
         onInterrupted: () => setLines((prev) => prev),
         onUsage: () => undefined,
+        onClose: (intentional) => {
+          if (intentional || autoRef.current.ended) return;
+          // Google cắt socket giữa phiên (thường sau ~10-15 phút hoặc khi mạng
+          // đổi Wi-Fi ↔ 4G). Transcript trên server vẫn còn: nối lại bằng token
+          // mới + brief mới, giới hạn 2 lần để không lặp vô hạn.
+          if (autoRef.current.count >= MAX_AUTO_RECONNECT) {
+            setError('Mất kết nối với AI và đã thử nối lại 2 lần. Bấm “Kết thúc” để lưu phiên này rồi bắt đầu phiên mới.');
+            return;
+          }
+          if (autoRef.current.busy) return;
+          autoRef.current.count += 1;
+          setNotice('mất kết nối — đang nối lại…');
+          void resumeLive(live);
+        },
       });
       liveRef.current = live;
       live.setDuplex(duplex);
       live.connect(started.live.socket, started.model);
     },
-    [append, duplex],
+    [append, duplex, resumeLive],
   );
 
   useEffect(() => {
@@ -329,6 +371,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
   const end = async () => {
     if (ending) return;
     setEnding(true);
+    autoRef.current.ended = true;
     await flush();
     liveRef.current?.disconnect();
     const id = startedRef.current?.id;
@@ -369,6 +412,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
         <span className={status === 'error' ? 'dot error' : 'dot'} />
         <b>{fmtTime(seconds)}</b>
         <span className="hint">{STATUS_LABEL[status]}{detail && status === 'closed' ? ` (${detail})` : ''}</span>
+        {notice && <span className="hint ok">{notice}</span>}
       </div>
 
       <div className="transcript" aria-live="polite">

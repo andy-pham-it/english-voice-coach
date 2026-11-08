@@ -22,6 +22,11 @@ export interface LiveHandlers {
   onAiText: (text: string) => void;
   onInterrupted: () => void;
   onUsage: (usage: LiveUsage) => void;
+  /**
+   * Socket đóng. `intentional` = false nghĩa là Google/mạng cắt ngang giữa
+   * phiên — UI nên nối lại chứ không bỏ im lặng (phiên 10–20 phút rất dễ bị).
+   */
+  onClose?: (intentional: boolean, reason: string) => void;
 }
 
 const WORKLET = `
@@ -75,7 +80,9 @@ export class LiveSession {
 
   connect(socketUrl: string, model: string): void {
     this.handlers.onStatus('connecting');
-    const ws = new WebSocket(socketUrl);
+    // Cờ đóng gắn vào từng socket: khi reconnect, socket cũ đóng *sau* khi
+    // socket mới đã mở, nên không thể dùng một cờ chung trên instance.
+    const ws = new WebSocket(socketUrl) as WebSocket & { closing?: boolean };
     this.ws = ws;
 
     ws.onopen = () => {
@@ -97,7 +104,9 @@ export class LiveSession {
     ws.onerror = () => this.handlers.onStatus('error', 'websocket error');
     ws.onclose = (e) => {
       this.stopAudio();
-      this.handlers.onStatus('closed', `${e.code}${e.reason ? ' ' + e.reason : ''}`);
+      const reason = `${e.code}${e.reason ? ' ' + e.reason : ''}`;
+      this.handlers.onStatus('closed', reason);
+      this.handlers.onClose?.(Boolean(ws.closing), reason);
     };
   }
 
@@ -290,7 +299,9 @@ export class LiveSession {
   }
 
   disconnect(): void {
-    this.ws?.close(1000);
+    const ws = this.ws as (WebSocket & { closing?: boolean }) | null;
+    if (ws) ws.closing = true;
+    ws?.close(1000);
     this.ws = null;
     this.stopAudio();
   }
@@ -298,6 +309,10 @@ export class LiveSession {
   /** Hook cho UI khi cần nạp brief mới giữa phiên. */
   reconnect(socketUrl: string, model: string): void {
     this.disconnect();
+    // Trạng thái mic không được rò sang kết nối mới: nếu đang PTT và socket rớt
+    // đúng lúc đang giữ nút thì mic phải đóng lại, chờ người dùng giữ lại.
+    this.muted = !this.duplex;
+    this.silenceUntil = 0;
     this.connect(socketUrl, model);
   }
 

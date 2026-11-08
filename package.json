@@ -40,7 +40,8 @@
     "verify:token": "tsx tools/verify-token.mjs",
     "verify:extract": "tsx tools/verify-extract.ts",
     "verify:api": "tsx tools/verify-api.ts",
-    "db:reset": "tsx tools/reset-dev.ts"
+    "db:reset": "tsx tools/reset-dev.ts",
+    "verify:live-close": "tsx tools/verify-live-close.ts"
   },
   "engines": {
     "node": "22.x"

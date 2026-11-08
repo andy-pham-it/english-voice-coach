@@ -68,6 +68,7 @@ With `ACCESS_CODE` unset, auth is disabled locally — the app opens straight to
 | `npm run verify:live` | Brief → ephemeral token → Live API round trip |
 | `npm run verify:token` | Ephemeral token creation only |
 | `npm run verify:extract` | Extraction pipeline against a fixture session (cleans up) |
+| `npm run verify:live-close` | Socket-close flags: reconnect vs. end-of-session (no mic, no network) |
 | `npm run verify:api` | 17 end-to-end API assertions (cleans up) |
 | `npm run dev:spike` | Serve the measurement spike at `:8080` |
 

@@ -68,6 +68,7 @@ Không đặt `ACCESS_CODE` thì local tắt auth — mở thẳng vào Home.
 | `npm run verify:live` | Brief → ephemeral token → gọi Live API thật |
 | `npm run verify:token` | Chỉ kiểm tạo ephemeral token |
 | `npm run verify:extract` | Chạy pipeline trích xuất trên phiên giả (tự dọn) |
+| `npm run verify:live-close` | Cờ đóng socket: tự nối lại hay kết thúc (không cần mic, không cần mạng) |
 | `npm run verify:api` | 17 assert API end-to-end (tự dọn) |
 | `npm run dev:spike` | Chạy spike đo ở `:8080` |
 
