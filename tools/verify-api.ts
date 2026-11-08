@@ -112,14 +112,24 @@ try {
 
   originalProfile = typeof ctxBeforeBody.profile === 'string' ? ctxBeforeBody.profile : null;
 
-  // 6. start session
-  const start = await call('/api/session/start', { method: 'POST', body: JSON.stringify({ mode: 'ptt' }) }, cookie);
+  // 6. start session — kèm chủ đề tự đặt, phải vào thẳng brief
+  const start = await call(
+    '/api/session/start',
+    { method: 'POST', body: JSON.stringify({ mode: 'ptt', topic: '  explaining a flaky test\n to my manager  ' }) },
+    cookie,
+  );
   const startBody = await start.json();
   sessionId = startBody?.session_id ?? null;
   check(
     'session/start 200',
     start.status === 200 && typeof sessionId === 'number' && startBody.brief_tokens > 0,
     `id=${sessionId} brief=${startBody.brief_tokens} token topic=${startBody.topic}`,
+  );
+  check(
+    'chủ đề tự đặt được đưa vào brief',
+    startBody.topic === 'explaining a flaky test to my manager' &&
+      String(startBody.brief).includes('explaining a flaky test to my manager'),
+    String(startBody.topic),
   );
   check(
     'start trả live token + socket',
@@ -129,6 +139,13 @@ try {
     String(startBody.live?.token ?? '').slice(0, 22),
   );
   check('start trả recap', Array.isArray(startBody.recap?.mistakes), `${startBody.recap?.mistakes?.length ?? 0} lỗi`);
+
+  // Hợp đồng client↔server: src/api.ts `StartResult` đọc đúng list key này.
+  // Trước đây client đọc `session.id` trong khi server trả `session_id` →
+  // session id undefined, cả phiên không được lưu mà không báo lỗi.
+  const START_KEYS = 'brief,brief_tokens,live,model,recap,resumed,session_id,topic';
+  const startKeys = Object.keys(startBody).sort().join(',');
+  check('shape của start khớp src/api.ts StartResult', startKeys === START_KEYS, startKeys);
 
   // 7. resume trong 15 phút phải trả cùng session, không tạo row mới
   const resume = await call('/api/session/start', { method: 'POST', body: JSON.stringify({ mode: 'ptt' }) }, cookie);

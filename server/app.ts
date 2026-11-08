@@ -143,8 +143,12 @@ export function createApp() {
   app.post('/api/session/start', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const mode = (body?.mode === 'ptt' ? 'ptt' : 'duplex') as SessionMode;
+    // Chủ đề người dùng tự đặt. Cắt xuống một dòng, ≤120 ký tự: nó đi thẳng
+    // vào systemInstruction nên không để xuống dòng lạ hay chuỗi quá dài.
+    const rawTopic = typeof body?.topic === 'string' ? body.topic.replace(/\s+/g, ' ').trim() : '';
+    const topic = rawTopic ? rawTopic.slice(0, 120) : undefined;
     try {
-      const result = await startSession(getDb(), { mode });
+      const result = await startSession(getDb(), { mode, topic });
       return c.json({
         session_id: result.session.id,
         resumed: result.resumed,

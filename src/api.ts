@@ -3,11 +3,15 @@ export interface Recap {
   dueVocab: string[];
 }
 
+// Đây là đúng những field server trả về (server/app.ts dựng JSON tay, dùng
+// snake_case cho hai field này). Đừng "chuẩn hoá" interface mà không sửa route:
+// lệch tên field là session_id thành undefined và cả phiên không được lưu.
 export interface StartResult {
   resumed: boolean;
-  session: { id: number; topic: string | null; brief: string | null; briefTokens: number | null };
+  session_id: number;
+  topic: string | null;
   brief: string;
-  briefTokens: number;
+  brief_tokens: number;
   recap: Recap;
   live: { token: string; socket: string; expiresAt: string };
   model: string;
@@ -82,8 +86,12 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    readonly detail?: string,
   ) {
-    super(code);
+    // message dùng để hiện cho người dùng: ưu tiên thông báo cụ thể của server
+    // ("Session 26 không có lượt nào để trích xuất") hơn mã lỗi chung.
+    super(detail || code);
+    this.name = 'ApiError';
   }
 }
 
@@ -95,7 +103,13 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new ApiError(res.status, body?.error ?? `http_${res.status}`);
+  if (!res.ok) {
+    throw new ApiError(
+      res.status,
+      body?.error ?? `http_${res.status}`,
+      typeof body?.message === 'string' ? body.message : undefined,
+    );
+  }
   return body as T;
 }
 
@@ -103,8 +117,11 @@ export const api = {
   authStatus: () => req<{ ok: boolean; auth: 'disabled' | 'enabled' }>('/api/auth/status'),
   login: (code: string) => req<{ ok: boolean }>('/api/auth', { method: 'POST', body: JSON.stringify({ code }) }),
   logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
-  start: (mode: 'duplex' | 'ptt') =>
-    req<StartResult>('/api/session/start', { method: 'POST', body: JSON.stringify({ mode }) }),
+  start: (mode: 'duplex' | 'ptt', topic?: string) =>
+    req<StartResult>('/api/session/start', {
+      method: 'POST',
+      body: JSON.stringify(topic ? { mode, topic } : { mode }),
+    }),
   events: (id: number, payload: { turns?: TurnEvent[]; usage?: { audioSec?: number; tokens?: number } }) =>
     req<{ ok: boolean }>(`/api/session/${id}/events`, { method: 'POST', body: JSON.stringify(payload) }),
   rebrief: (id: number) =>

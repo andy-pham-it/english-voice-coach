@@ -85,7 +85,10 @@ export async function getRecap(db: Db): Promise<Recap> {
   };
 }
 
-export async function startSession(db: Db, options: { mode: SessionMode }): Promise<StartResult> {
+export async function startSession(
+  db: Db,
+  options: { mode: SessionMode; topic?: string },
+): Promise<StartResult> {
   const now = Date.now();
   const [active] = await db
     .select()
@@ -114,7 +117,7 @@ export async function startSession(db: Db, options: { mode: SessionMode }): Prom
       .where(eq(sessions.id, active.id));
   }
 
-  const brief = await composeBrief(db);
+  const brief = await composeBrief(db, options.topic ? { topic: options.topic } : undefined);
   const [created] = await db
     .insert(sessions)
     .values({

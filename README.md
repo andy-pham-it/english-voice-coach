@@ -17,6 +17,10 @@ wrong and brings it back next time.
 Home → Recap (mistakes + due phrases) → Session (Gemini Live, full-duplex) → Summary → Home
 ```
 
+On Home you can type a topic (or tap a chip: daily standup, code review, technical disagreement,
+job interview) and check the microphone before starting. The topic goes straight into the brief, so
+the AI opens on the subject you want. Leave it empty and the app picks one from your weak spots.
+
 Memory is two-phase, because the Live API only accepts `systemInstruction` once per connection:
 
 ```
@@ -98,7 +102,9 @@ server/
   memory/brief.ts     profile + state + recall → brief
   extract/            prompt, zod schema, providers, apply
   session/service.ts  start / events / rebrief / end
+  session/history.ts  past sessions + transcript for the History tab
 src/                  React client: Home, Session, Summary, History, Context
+src/mic.ts            microphone probe used by Home
 spike/index.html      measurement harness (T1 / T3 / V1), not shipped
 tools/                dev server, log queries, verification scripts
 drizzle/              generated SQL migrations

@@ -17,6 +17,10 @@ và mang ra nhắc ở phiên sau.
 Home → Recap (lỗi lặp + từ đến hạn) → Session (Gemini Live, full-duplex) → Summary → Home
 ```
 
+Ở Home bạn gõ được chủ đề (hoặc bấm chip: daily standup, code review, technical disagreement,
+job interview) và kiểm tra micro trước khi vào phiên. Chủ đề đi thẳng vào brief nên AI mở đúng
+câu chuyện bạn muốn. Để trống thì app tự chọn từ những lỗi bạn hay lặp.
+
 Trí nhớ chạy hai pha, vì Live API chỉ nhận `systemInstruction` một lần mỗi kết nối:
 
 ```
@@ -97,7 +101,9 @@ server/
   memory/brief.ts     profile + state + recall → brief
   extract/            prompt, zod schema, providers, ghi DB
   session/service.ts  start / events / rebrief / end
+  session/history.ts  phiên cũ + transcript cho tab History
 src/                  React client: Home, Session, Summary, History, Context
+src/mic.ts            kiểm tra micro dùng ở Home
 spike/index.html      bộ đo T1 / T3 / V1, không ship
 tools/                dev server, truy vấn log, script verify
 drizzle/              migration SQL đã sinh

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, type ContextResult, type EndResult, type SessionDetail, type SessionListItem, type StartResult, type TurnEvent } from './api';
 import { LiveSession, type LiveStatus } from './live';
+import { probeMicrophone, type MicProbe } from './mic';
 
 type View = 'home' | 'session' | 'summary' | 'context' | 'history';
 
@@ -56,8 +57,9 @@ export default function App() {
       {view === 'home' && ctx && (
         <Home
           ctx={ctx}
-          onStart={(mode) => {
+          onStart={(mode, topic) => {
             sessionStorage.setItem('mode', mode);
+            sessionStorage.setItem('topic', topic ?? '');
             setView('session');
           }}
         />
@@ -104,7 +106,30 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
-function Home({ ctx, onStart }: { ctx: ContextResult; onStart: (mode: 'duplex' | 'ptt') => void }) {
+function Home({
+  ctx,
+  onStart,
+}: {
+  ctx: ContextResult;
+  onStart: (mode: 'duplex' | 'ptt', topic?: string) => void;
+}) {
+  const [topic, setTopic] = useState('');
+  const [mic, setMic] = useState<{ busy: boolean; result: MicProbe | null }>({ busy: false, result: null });
+
+  const chips = ['daily standup', 'code review', 'technical disagreement', 'job interview'];
+
+  const checkMic = async () => {
+    setMic({ busy: true, result: null });
+    try {
+      setMic({ busy: false, result: await probeMicrophone() });
+    } catch (e) {
+      setMic({
+        busy: false,
+        result: { ok: false, level: 0, devices: 0, detail: e instanceof Error ? e.message : 'kiểm tra micro lỗi' },
+      });
+    }
+  };
+
   return (
     <main className="stack">
       <section className="card">
@@ -112,11 +137,37 @@ function Home({ ctx, onStart }: { ctx: ContextResult; onStart: (mode: 'duplex' |
         <p className="hint">
           Tuần này: {ctx.week.minutes} phút · {ctx.week.sessions} phiên · hôm nay {Math.round(ctx.today.audioSec / 60)} phút
         </p>
+        <label htmlFor="topic">Chủ đề (để trống thì app tự chọn)</label>
+        <input
+          id="topic"
+          value={topic}
+          maxLength={120}
+          placeholder="ví dụ: explaining a database migration to my manager"
+          onChange={(e) => setTopic(e.target.value)}
+        />
+        <div className="chips">
+          {chips.map((c) => (
+            <button key={c} type="button" className="chip" onClick={() => setTopic(c)}>
+              {c}
+            </button>
+          ))}
+        </div>
         <div className="row">
-          <button className="primary" onClick={() => onStart('duplex')}>
+          <button className="primary" onClick={() => onStart('duplex', topic.trim() || undefined)}>
             Bắt đầu 10 phút
           </button>
-          <button onClick={() => onStart('ptt')}>Push-to-talk</button>
+          <button onClick={() => onStart('ptt', topic.trim() || undefined)}>Push-to-talk</button>
+        </div>
+        <div className="row">
+          <button className="link" onClick={checkMic} disabled={mic.busy}>
+            {mic.busy ? 'đang kiểm tra micro…' : 'Kiểm tra micro'}
+          </button>
+          {mic.result && (
+            <span className={mic.result.ok ? 'hint ok' : 'error'}>
+              {mic.result.detail}
+              {mic.result.devices > 1 ? ` (${mic.result.devices} micro)` : ''}
+            </span>
+          )}
         </div>
       </section>
 
@@ -160,6 +211,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
 
   const liveRef = useRef<LiveSession | null>(null);
   const startedRef = useRef<{ id: number; model: string } | null>(null);
+  const startRef = useRef<Promise<StartResult> | null>(null);
   const sentRef = useRef(0);
   const linesRef = useRef<Line[]>([]);
   const lastRoleRef = useRef<'user' | 'assistant' | null>(null);
@@ -216,10 +268,15 @@ function Session({ onFinished }: { onFinished: () => void }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const started = await api.start(duplex ? 'duplex' : 'ptt');
+      // StrictMode ở dev mount effect hai lần; nếu gọi api.start hai lần thì
+      // tạo hai row session (đã gặp: id 25 và 26). Giữ một promise dùng chung.
+      startRef.current ??= api.start(duplex ? 'duplex' : 'ptt', sessionStorage.getItem('topic') || undefined);
+      const started = await startRef.current;
       if (cancelled) return;
-      startedRef.current = { id: started.session.id, model: started.model };
-      sessionStorage.setItem('session_id', String(started.session.id));
+      const sessionId = started.session_id;
+      if (!Number.isInteger(sessionId)) throw new Error('server không trả session_id');
+      startedRef.current = { id: sessionId, model: started.model };
+      sessionStorage.setItem('session_id', String(sessionId));
       connect(started);
     })().catch((e) => setError(e instanceof Error ? e.message : 'không kết nối được'));
 
