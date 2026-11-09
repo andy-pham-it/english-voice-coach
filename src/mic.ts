@@ -21,6 +21,12 @@ const ERROR_TEXT: Record<string, string> = {
   OverconstrainedError: 'Micro không đáp ứng được cấu hình yêu cầu.',
 };
 
+/** Câu giải thích cho lỗi getUserMedia, dùng chung cho probe và lúc vào phiên. */
+export function micErrorText(e: unknown): string {
+  const name = e instanceof Error ? e.name : '';
+  return ERROR_TEXT[name] ?? `Không mở được micro (${name || 'lỗi không rõ'}).`;
+}
+
 export async function probeMicrophone(ms = 2000): Promise<MicProbe> {
   if (!window.isSecureContext) {
     return { ok: false, level: 0, devices: 0, detail: 'Trang phải chạy HTTPS (hoặc localhost) mới mở được micro.' };
@@ -73,12 +79,11 @@ export async function probeMicrophone(ms = 2000): Promise<MicProbe> {
           : `Tín hiệu quá nhỏ (${pct}%). Nói to hơn hoặc đổi micro đầu vào rồi thử lại.`,
     };
   } catch (e) {
-    const name = e instanceof Error ? e.name : '';
     return {
       ok: false,
       level: 0,
       devices: 0,
-      detail: ERROR_TEXT[name] ?? `Không mở được micro (${name || 'lỗi không rõ'}).`,
+      detail: micErrorText(e),
     };
   } finally {
     stream?.getTracks().forEach((t) => t.stop());

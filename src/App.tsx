@@ -411,7 +411,12 @@ function Session({ onFinished }: { onFinished: () => void }) {
       <div className="session-head">
         <span className={status === 'error' ? 'dot error' : 'dot'} />
         <b>{fmtTime(seconds)}</b>
-        <span className="hint">{STATUS_LABEL[status]}{detail && status === 'closed' ? ` (${detail})` : ''}</span>
+        <span className="hint">
+          {STATUS_LABEL[status]}
+          {/* Lý do phải hiện ở mọi trạng thái lỗi: ẩn đi thì người dùng chỉ thấy
+              "lỗi" mà không biết mic bị chặn quyền hay mạng hỏng. */}
+          {detail && status !== 'connecting' ? ` (${detail})` : ''}
+        </span>
         {notice && <span className="hint ok">{notice}</span>}
       </div>
 

@@ -6,7 +6,11 @@
  *    tuyến tính, giữ pha giữa các chunk.
  *  - Không có `audioStreamEnd`: ở chế độ PTT phải gửi thêm ~1.2s im lặng sau khi
  *    thả nút, nếu không server không bao giờ chốt câu.
+ *  - JSON của server đến trong frame nhị phân (ArrayBuffer); đọc sai kiểu frame
+ *    là mất `setupComplete` và mic không bao giờ được xin quyền.
  */
+
+import { micErrorText } from './mic';
 
 export type LiveStatus = 'connecting' | 'ready' | 'listening' | 'ai-speaking' | 'error' | 'closed';
 
@@ -83,6 +87,10 @@ export class LiveSession {
     // Cờ đóng gắn vào từng socket: khi reconnect, socket cũ đóng *sau* khi
     // socket mới đã mở, nên không thể dùng một cờ chung trên instance.
     const ws = new WebSocket(socketUrl) as WebSocket & { closing?: boolean };
+    // Live API trả JSON trong frame nhị phân (ArrayBuffer), không phải text.
+    // Bỏ qua frame nhị phân là mất luôn setupComplete — mic không bao giờ được
+    // xin quyền và phiên treo ở "đang kết nối".
+    ws.binaryType = 'arraybuffer';
     this.ws = ws;
 
     ws.onopen = () => {
@@ -91,10 +99,10 @@ export class LiveSession {
     };
 
     ws.onmessage = (event) => {
-      if (typeof event.data !== 'string') return;
+      const text = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data as ArrayBuffer);
       let msg: any;
       try {
-        msg = JSON.parse(event.data);
+        msg = JSON.parse(text);
       } catch {
         return;
       }
@@ -174,7 +182,9 @@ export class LiveSession {
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch (e) {
-      this.handlers.onStatus('error', 'không lấy được micro — cần HTTPS hoặc localhost');
+      // Nêu đúng lý do: bị chặn quyền, không có thiết bị, hay bị app khác chiếm
+      // — mỗi trường hợp có cách xử lý khác nhau.
+      this.handlers.onStatus('error', micErrorText(e));
       return;
     }
 

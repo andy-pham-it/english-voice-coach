@@ -121,5 +121,31 @@ const makeSession = () => {
   check('PTT reconnect → mic đóng lại', muted === true, `muted=${muted}`);
 }
 
+// E. Live API gửi JSON trong frame nhị phân. Bỏ qua frame nhị phân là mất
+//    setupComplete → không xin quyền micro, phiên treo ở "đang kết nối".
+{
+  FakeWs.all = [];
+  const statuses: string[] = [];
+  const heard: string[] = [];
+  const session = new LiveSession({
+    onStatus: (s) => statuses.push(s),
+    onUserText: (t) => heard.push(t),
+    onAiText: () => undefined,
+    onInterrupted: () => undefined,
+    onUsage: () => undefined,
+  });
+  session.connect('ws://fake/e', 'model');
+  const ws = FakeWs.all.at(-1)!;
+  const frame = (obj: unknown) => new TextEncoder().encode(JSON.stringify(obj)).buffer;
+
+  check('client yêu cầu frame nhị phân dạng arraybuffer', (ws as any).binaryType === 'arraybuffer', String((ws as any).binaryType));
+
+  ws.onmessage?.({ data: frame({ serverContent: { inputTranscription: { text: 'hello from binary' } } }) } as any);
+  check('đọc được frame nhị phân', heard[0] === 'hello from binary', JSON.stringify(heard));
+
+  ws.onmessage?.({ data: frame({ setupComplete: {} }) } as any);
+  check('setupComplete trong frame nhị phân → ready', statuses.includes('ready'), JSON.stringify(statuses));
+}
+
 console.log(failures ? `\n${failures} FAIL` : '\nOK');
 if (failures) process.exitCode = 1;
