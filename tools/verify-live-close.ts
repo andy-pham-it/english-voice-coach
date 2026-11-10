@@ -147,5 +147,69 @@ const makeSession = () => {
   check('setupComplete trong frame nhị phân → ready', statuses.includes('ready'), JSON.stringify(statuses));
 }
 
+// F. Live API trả giọng nói trong serverContent.modelTurn.parts[].inlineData.
+//    Trước đây khối này bị bỏ qua hoàn toàn nên UI chỉ hiện transcript, không
+//    có tiếng — nhìn như "AI trả lời bằng chữ".
+{
+  FakeWs.all = [];
+  const played: { length: number; at: number }[] = [];
+
+  class FakeAudioContext {
+    state = 'running';
+    currentTime = 0;
+    destination = {};
+    createBuffer(_channels: number, length: number, rate: number) {
+      return {
+        length,
+        sampleRate: rate,
+        duration: length / rate,
+        copyToChannel: () => undefined,
+      };
+    }
+    createBufferSource() {
+      const src: any = {
+        buffer: null as { length: number } | null,
+        connect: () => undefined,
+        start: (at: number) => played.push({ length: src.buffer?.length ?? 0, at }),
+      };
+      return src;
+    }
+    resume() {
+      this.state = 'running';
+      return Promise.resolve();
+    }
+  }
+  (globalThis as any).AudioContext = FakeAudioContext;
+
+  const statuses: string[] = [];
+  const session = new LiveSession({
+    onStatus: (s) => statuses.push(s),
+    onUserText: () => undefined,
+    onAiText: () => undefined,
+    onInterrupted: () => undefined,
+    onUsage: () => undefined,
+  });
+  session.connect('ws://fake/f', 'model');
+  const ws = FakeWs.all.at(-1)!;
+  // initAudio() cần mic thật; test thay thẳng đầu ra bằng context giả.
+  (session as any).acOut = new FakeAudioContext();
+
+  const pcm = new Int16Array(240).fill(1000);
+  const data = Buffer.from(pcm.buffer).toString('base64');
+  const frame = (obj: unknown) => new TextEncoder().encode(JSON.stringify(obj)).buffer;
+  ws.onmessage?.({
+    data: frame({
+      serverContent: {
+        modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data } }] },
+      },
+    }),
+  } as any);
+
+  check('phát audio của AI từ modelTurn', played.length === 1 && played[0]?.length === 240, JSON.stringify(played));
+  check('có audio → status ai-speaking', statuses.includes('ai-speaking'), JSON.stringify(statuses));
+
+  delete (globalThis as any).AudioContext;
+}
+
 console.log(failures ? `\n${failures} FAIL` : '\nOK');
 if (failures) process.exitCode = 1;

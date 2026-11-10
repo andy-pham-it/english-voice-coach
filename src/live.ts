@@ -127,6 +127,14 @@ export class LiveSession {
 
     const sc = msg.serverContent;
     if (sc) {
+      // Giọng nói của AI nằm ở đây. Không đọc khối này thì UI chỉ có
+      // transcript — nhìn y như "AI trả lời bằng chữ".
+      for (const part of sc.modelTurn?.parts ?? []) {
+        const audio = part?.inlineData?.data;
+        if (!audio) continue;
+        this.handlers.onStatus('ai-speaking');
+        this.play(audio);
+      }
       if (sc.inputTranscription?.text) this.handlers.onUserText(sc.inputTranscription.text);
       if (sc.outputTranscription?.text) {
         this.handlers.onStatus('ai-speaking');
@@ -264,6 +272,9 @@ export class LiveSession {
 
   private play(base64: string): void {
     if (!this.acOut) return;
+    // Chrome tạo AudioContext ở trạng thái suspended khi không có thao tác
+    // người dùng trực tiếp; currentTime đứng yên nên mọi chunk bị xếp chồng.
+    if (this.acOut.state === 'suspended') void this.acOut.resume();
     const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
     const i16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
     const f32 = new Float32Array(i16.length);
