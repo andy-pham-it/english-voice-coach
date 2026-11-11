@@ -213,6 +213,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
 
   const liveRef = useRef<LiveSession | null>(null);
   const startedRef = useRef<{ id: number; model: string } | null>(null);
@@ -456,6 +457,27 @@ function Session({ onFinished }: { onFinished: () => void }) {
         </button>
       )}
 
+      <form
+        className="row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const text = typed.trim();
+          if (!text) return;
+          liveRef.current?.sendText(text);
+          setTyped('');
+        }}
+      >
+        <input
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          placeholder="Không tiện nói? Gõ câu tiếng Anh…"
+          disabled={status === 'connecting' || status === 'closed'}
+        />
+        <button type="submit" disabled={!typed.trim() || status === 'connecting' || status === 'closed'}>
+          Gửi
+        </button>
+      </form>
+
       <div className="row">
         <button onClick={() => void rebrief()} disabled={rebriefing || status === 'closed'}>
           {rebriefing ? 'đang nạp lại…' : 'Nhắc AI'}
@@ -467,6 +489,15 @@ function Session({ onFinished }: { onFinished: () => void }) {
       {error && <p className="error">{error}</p>}
     </main>
   );
+}
+
+function speak(text: string) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = 0.85;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
 }
 
 function Summary({ onContext, onHome }: { onContext: () => void; onHome: () => void }) {
@@ -496,6 +527,7 @@ function Summary({ onContext, onHome }: { onContext: () => void; onHome: () => v
         extract: 'done',
         items: result.items,
         phrases: result.phrases,
+        tomorrow: result.tomorrow,
       };
       setData(next);
       sessionStorage.setItem('summary', next.summary ?? '');
@@ -537,6 +569,25 @@ function Summary({ onContext, onHome }: { onContext: () => void; onHome: () => v
             </button>
             {err && <span className="error">{err}</span>}
           </div>
+        )}
+
+        {(data?.tomorrow?.length ?? 0) > 0 && (
+          <>
+            <h2>3 câu dùng ngay mai</h2>
+            <ul className="list">
+              {data!.tomorrow!.map((t, i) => (
+                <li key={i}>
+                  {i + 1}. “{t.en}”{' '}
+                  <button className="say" onClick={() => speak(t.en)}>
+                    Đọc
+                  </button>
+                  <div className="hint">
+                    {t.vi} · {t.tag}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
 
         {(data?.items?.length ?? 0) > 0 && (

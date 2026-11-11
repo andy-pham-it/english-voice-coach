@@ -43,6 +43,12 @@ export interface CorrectionItem {
   note: string;
 }
 
+export interface TomorrowPhrase {
+  en: string;
+  vi: string;
+  tag: string;
+}
+
 export interface EndResult {
   sessionId: number;
   status: string;
@@ -54,6 +60,7 @@ export interface EndResult {
   corrections: number;
   items?: CorrectionItem[];
   phrases?: string[];
+  tomorrow?: TomorrowPhrase[];
   error?: string;
 }
 
@@ -135,7 +142,7 @@ export const api = {
       body: JSON.stringify({ durationSec }),
     }),
   extract: (id: number) =>
-    req<{ ok?: boolean; extract?: string; summary: string | null; topic?: string; corrections?: number; items?: CorrectionItem[]; phrases?: string[] }>(
+    req<{ ok?: boolean; extract?: string; summary: string | null; topic?: string; corrections?: number; items?: CorrectionItem[]; phrases?: string[]; tomorrow?: TomorrowPhrase[] }>(
       `/api/session/${id}/extract`,
       { method: 'POST' },
     ),

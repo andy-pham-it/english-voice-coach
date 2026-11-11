@@ -179,8 +179,12 @@ export class LiveSession {
     this.handlers.onStatus('ready');
   }
 
-  private sendText(text: string): void {
+  sendText(text: string): void {
     this.ws?.send(JSON.stringify({ realtimeInput: { text } }));
+    // Text gõ không được Live API echo lại (chỉ bật inputAudioTranscription),
+    // nên phải tự đưa vào transcript — nếu không bước trích xuất không thấy
+    // một dòng nào của người học.
+    this.handlers.onUserText(text);
   }
 
   async initAudio(): Promise<void> {

@@ -15,6 +15,13 @@
       "when": 1793986488559,
       "tag": "0001_sturdy_mephistopheles",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794356760734,
+      "tag": "0002_supreme_lightspeed",
+      "breakpoints": true
     }
   ]
 }

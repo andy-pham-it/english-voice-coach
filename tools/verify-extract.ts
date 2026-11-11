@@ -10,6 +10,8 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createDb } from '../server/db/client.js';
 import { mistakes, sessions, turns, usageDaily, vocab } from '../server/db/schema.js';
 import { extractAndStore, applyExtraction } from '../server/extract/run.js';
+import { extractionSchema } from '../server/extract/schema.js';
+import { dueVocabQuery } from '../server/memory/brief.js';
 
 const text = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
 for (const line of text.split('\n')) {
@@ -90,6 +92,21 @@ async function cleanup() {
 await snapshot();
 
 try {
+  // --- Hợp đồng schema: câu tomorrow dài (≤120) phải dùng lại được trong
+  // used_phrases. Trước đây used_phrases max 80 nên một câu 118 ký tự làm
+  // safeParse reject cả payload — mất summary, corrections, tomorrow.
+  const longSentence =
+    'Yesterday I went through the migration plan with the platform team and we agreed to split the rollout into two steps.';
+  check(
+    'used_phrases nhận câu dài như câu tomorrow',
+    extractionSchema.safeParse({
+      topic: 'migration planning',
+      summary: 'The learner walked through a migration plan and the team agreed on two rollout steps.',
+      used_phrases: [longSentence],
+    }).success,
+    `${longSentence.length} ký tự`,
+  );
+
   // --- Fixture: một phiên ngắn có đúng 4 lỗi rõ ràng -----------------------
   const startedAt = new Date(Date.now() - 10 * 60_000);
   const [session] = await db
@@ -170,6 +187,15 @@ try {
   check('corrections > 0', result.corrections > 0, `${result.corrections}`);
   check('corrections ≤ 5', result.corrections <= 5);
 
+  // Fixture có lỗi thật nên phải sinh được câu dùng ngay mai; "0 câu" là
+  // trạng thái chưa có tính năng, không phải trạng thái đúng.
+  const tomorrow = result.extraction.tomorrow ?? [];
+  check('tomorrow 1–3 câu', tomorrow.length >= 1 && tomorrow.length <= 3, `${tomorrow.length}`);
+  check(
+    'mỗi câu tomorrow có en + vi + tag',
+    tomorrow.every((t) => t.en.length >= 8 && t.vi.length >= 4 && !!t.tag),
+  );
+
   const written = await db
     .select({ pattern: mistakes.pattern, wrong: mistakes.wrong, right: mistakes.right, count: mistakes.count })
     .from(mistakes)
@@ -200,6 +226,90 @@ try {
   const newVocab = vocabRows.filter((v) => v.createdAt.getTime() >= t0);
   console.log('vocab mới trong phiên:', newVocab.map((v) => `${v.phrase}×${v.count}`).join(', ') || '(không có)');
 
+  const tomorrowRows = await db
+    .select({ tomorrow: sessions.tomorrow })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+  check(
+    'tomorrow được lưu vào session',
+    (tomorrowRows[0]?.tomorrow ?? []).length === tomorrow.length,
+    `${(tomorrowRows[0]?.tomorrow ?? []).length}/${tomorrow.length}`,
+  );
+  const tomorrowInVocab = vocabRows.filter((v) => tomorrow.some((t) => t.en === v.phrase));
+  check(
+    'câu tomorrow vào vocab',
+    tomorrowInVocab.length === tomorrow.length,
+    `${tomorrowInVocab.length}/${tomorrow.length}`,
+  );
+
+  // Câu của hôm nay phải thắng tie count=1 với 3 cụm seed khi sang ngày mai,
+  // nếu không brief phiên sau cắt mất đúng những câu vừa dạy.
+  await db
+    .update(vocab)
+    .set({ nextReview: new Date(Date.now() - 86_400_000) })
+    .where(inArray(vocab.phrase, tomorrow.map((t) => t.en)));
+  const dueNow = await dueVocabQuery(db, 3);
+  check(
+    'câu tomorrow vào danh sách đến hạn của brief',
+    tomorrow.every((t) => dueNow.some((d) => d.phrase === t.en)),
+    dueNow.map((d) => d.phrase).join(' | '),
+  );
+
+  // --- Test tất định cho used_phrases + hạn ôn, không phụ thuộc LLM --------
+  const [second] = await db
+    .insert(sessions)
+    .values({
+      startedAt: new Date(Date.now() - 60_000),
+      status: 'ended',
+      durationSec: 60,
+      mode: 'duplex',
+      brief: 'fixture 2',
+      briefTokens: 10,
+    })
+    .returning({ id: sessions.id });
+  const sid2 = second!.id;
+  const fixtureTomorrow = {
+    en: 'I will follow up on the read path tomorrow morning.',
+    vi: 'Mai tôi sẽ theo tiếp phần read path.',
+    tag: 'standup' as const,
+  };
+  const pushBefore = await db
+    .select({ count: vocab.count, nextReview: vocab.nextReview })
+    .from(vocab)
+    .where(eq(vocab.phrase, 'push back'));
+  const fixtureExtraction = {
+    topic: 'follow up on the read path',
+    summary: 'Short fixture session used to check the vocabulary review dates.',
+    corrections: [],
+    new_phrases: [],
+    tomorrow: [fixtureTomorrow],
+    used_phrases: ['push back'],
+  };
+  await applyExtraction(db, sid2, fixtureExtraction, { provider: 'test', model: 'test', tokens: 0 });
+  const runOnce = await db.select().from(vocab).where(eq(vocab.phrase, 'push back'));
+  const credited = (runOnce[0]?.count ?? 0) - (pushBefore[0]?.count ?? 0);
+  const creditedDays = runOnce[0]?.nextReview
+    ? Math.round((runOnce[0].nextReview.getTime() - Date.now()) / 86_400_000)
+    : null;
+  check('cụm đã dùng được cộng đúng 1', credited === 1, `${credited}`);
+  check('cụm đã dùng hẹn ôn sau ~7 ngày', creditedDays !== null && creditedDays >= 6 && creditedDays <= 8, `${creditedDays} ngày`);
+
+  const fixtureRow = await db.select().from(vocab).where(eq(vocab.phrase, fixtureTomorrow.en));
+  const fixtureDays = fixtureRow[0]?.nextReview
+    ? Math.round((fixtureRow[0].nextReview.getTime() - Date.now()) / 86_400_000)
+    : null;
+  check(
+    'câu tomorrow hẹn ôn sau ~1 ngày',
+    fixtureRow.length === 1 && fixtureDays !== null && fixtureDays >= 0 && fixtureDays <= 2,
+    `${fixtureDays} ngày`,
+  );
+
+  await applyExtraction(db, sid2, fixtureExtraction, { provider: 'test', model: 'test', tokens: 0 });
+  const runTwice = await db.select().from(vocab).where(eq(vocab.phrase, 'push back'));
+  check('ghi lại không cộng lần hai', runTwice[0]?.count === runOnce[0]?.count, `${runTwice[0]?.count}`);
+  await db.delete(sessions).where(eq(sessions.id, sid2));
+
   // Idempotent: gọi lại không được cộng count lần hai.
   const before = await db
     .select({ count: mistakes.count })
@@ -213,6 +323,8 @@ try {
       summary: 'y',
       corrections: [{ pattern: 'past_tense', wrong: 'a', right: 'b', note: '' }],
       new_phrases: [],
+      tomorrow: [],
+      used_phrases: [],
     },
     { provider: 'test', model: 'test', tokens: 0 },
   );

@@ -215,6 +215,7 @@ export interface EndResult {
   corrections: number;
   items?: { wrong: string; right: string; pattern: string; note: string }[];
   phrases?: string[];
+  tomorrow?: { en: string; vi: string; tag: string }[];
   error?: string;
 }
 
@@ -275,6 +276,7 @@ export async function endSession(
         note: c.note ?? '',
       })),
       phrases: result.extraction.new_phrases,
+      tomorrow: result.extraction.tomorrow,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

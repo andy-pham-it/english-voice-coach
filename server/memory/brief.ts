@@ -122,6 +122,21 @@ async function loadStateRows(db: Db): Promise<StateRow> {
   };
 }
 
+/**
+ * Cụm đến hạn ôn — dùng chung cho brief và bước trích xuất, để prompt chỉ
+ * được chọn `used_phrases` từ đúng danh sách người học đang được nhắc.
+ * Có hạn gần nhất đứng trước (câu vừa học hôm qua thắng 3 cụm seed có
+ * `next_review = null`), cùng hạn thì cụm lặp nhiều hơn đứng trước.
+ */
+export function dueVocabQuery(db: Db, limit = 5) {
+  return db
+    .select({ phrase: vocab.phrase })
+    .from(vocab)
+    .where(or(isNull(vocab.nextReview), sql`${vocab.nextReview} <= now()`))
+    .orderBy(sql`${vocab.nextReview} asc nulls last`, desc(vocab.count))
+    .limit(limit);
+}
+
 /** State: lỗi lặp lại, cụm từ đến hạn, số liệu tuần. Không bao giờ do LLM viết. */
 export function renderState(
   rows: StateRow,
@@ -233,12 +248,7 @@ export async function composeBrief(db: Db, options?: Partial<ComposeOptions>): P
     .orderBy(desc(mistakes.count), desc(mistakes.lastSeen))
     .limit(5);
 
-  const dueVocab = await db
-    .select({ phrase: vocab.phrase })
-    .from(vocab)
-    .where(or(isNull(vocab.nextReview), sql`${vocab.nextReview} <= now()`))
-    .orderBy(desc(vocab.count))
-    .limit(5);
+  const dueVocab = await dueVocabQuery(db);
 
   const state = await loadStateRows(db);
   const topic = options?.topic ?? deriveTopic({ dueVocab, topMistakes, sessionCount: state.weekSessions });

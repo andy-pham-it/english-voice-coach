@@ -211,5 +211,30 @@ const makeSession = () => {
   delete (globalThis as any).AudioContext;
 }
 
+// G. Gõ chữ: câu gõ phải đi đúng đường realtimeInput.text của Live API và
+// phải vào transcript của app — nếu không, phiên gõ chữ không có LEARNER line
+// và bước trích xuất không thấy lỗi nào.
+{
+  FakeWs.all = [];
+  const typed: string[] = [];
+  const session = new LiveSession({
+    onStatus: () => undefined,
+    onUserText: (t) => typed.push(t),
+    onAiText: () => undefined,
+    onInterrupted: () => undefined,
+    onUsage: () => undefined,
+  });
+  session.connect('ws://fake/g', 'model');
+  const ws = FakeWs.all.at(-1)!;
+  session.sendText('hello');
+
+  check(
+    'gõ chữ gửi realtimeInput.text',
+    ws.sent.includes(JSON.stringify({ realtimeInput: { text: 'hello' } })),
+    JSON.stringify(ws.sent),
+  );
+  check('gõ chữ vào transcript của app', typed.includes('hello'), JSON.stringify(typed));
+}
+
 console.log(failures ? `\n${failures} FAIL` : '\nOK');
 if (failures) process.exitCode = 1;
