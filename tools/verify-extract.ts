@@ -209,6 +209,23 @@ try {
   const newVocab = vocabRows.filter((v) => v.createdAt.getTime() >= t0);
   console.log('vocab mới trong phiên:', newVocab.map((v) => `${v.phrase}×${v.count}`).join(', ') || '(không có)');
 
+  const tomorrowRows = await db
+    .select({ tomorrow: sessions.tomorrow })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+  check(
+    'tomorrow được lưu vào session',
+    (tomorrowRows[0]?.tomorrow ?? []).length === tomorrow.length,
+    `${(tomorrowRows[0]?.tomorrow ?? []).length}/${tomorrow.length}`,
+  );
+  const tomorrowInVocab = vocabRows.filter((v) => tomorrow.some((t) => t.en === v.phrase));
+  check(
+    'câu tomorrow vào vocab',
+    tomorrowInVocab.length === tomorrow.length,
+    `${tomorrowInVocab.length}/${tomorrow.length}`,
+  );
+
   // Idempotent: gọi lại không được cộng count lần hai.
   const before = await db
     .select({ count: mistakes.count })

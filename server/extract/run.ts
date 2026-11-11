@@ -12,7 +12,7 @@ import { mistakes, sessions, turns, usageDaily, vocab } from '../db/schema.js';
 import { env } from '../env.js';
 import { EXTRACT_SYSTEM, buildExtractPrompt, trimTranscript, type TranscriptTurn } from './prompt.js';
 import { parseJsonLoose, callProvider, GEMINI_EXTRACT_MODEL, type ExtractProvider } from './providers.js';
-import { extractionSchema, type Correction, type Extraction } from './schema.js';
+import { extractionSchema, type Correction, type Extraction, type TomorrowPhrase } from './schema.js';
 
 export interface ExtractRun {
   extraction: Extraction;
@@ -83,6 +83,7 @@ export interface ApplyResult {
   corrections: number;
   phrases: number;
   turnsMatched: number;
+  tomorrow: TomorrowPhrase[];
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -99,7 +100,7 @@ export async function applyExtraction(
   meta: { provider: string; model: string; tokens: number },
 ): Promise<ApplyResult> {
   const [session] = await db
-    .select({ summary: sessions.summary, status: sessions.status })
+    .select({ summary: sessions.summary, status: sessions.status, tomorrow: sessions.tomorrow })
     .from(sessions)
     .where(eq(sessions.id, sessionId))
     .limit(1);
@@ -107,20 +108,20 @@ export async function applyExtraction(
 
   // Idempotent: đã có summary nghĩa là bước này đã chạy xong.
   if (session.summary) {
-    return { sessionId, corrections: 0, phrases: 0, turnsMatched: 0 };
+    return { sessionId, corrections: 0, phrases: 0, turnsMatched: 0, tomorrow: (session.tomorrow ?? []) as TomorrowPhrase[] };
   }
 
   const now = new Date();
   const updated = await db
     .update(sessions)
-    .set({ topic: extraction.topic, summary: extraction.summary, status: 'ended', endedAt: now })
+    .set({ topic: extraction.topic, summary: extraction.summary, status: 'ended', endedAt: now, tomorrow: extraction.tomorrow })
     .where(eq(sessions.id, sessionId))
     .returning({ id: sessions.id });
 
   // Session bị xoá trong lúc chờ LLM (dọn dữ liệu test, hoặc timeout rồi bị
   // retry khác thay thế): không ghi mistakes cho một phiên không còn tồn tại.
   if (!updated.length) {
-    return { sessionId, corrections: 0, phrases: 0, turnsMatched: 0 };
+    return { sessionId, corrections: 0, phrases: 0, turnsMatched: 0, tomorrow: (session.tomorrow ?? []) as TomorrowPhrase[] };
   }
 
   for (const c of extraction.corrections) {
@@ -163,6 +164,25 @@ export async function applyExtraction(
       });
   }
 
+  // Cụm đến hạn mà người học đã dùng đúng: đẩy hạn ôn xa 7 ngày.
+  for (const phrase of extraction.used_phrases) {
+    await db
+      .update(vocab)
+      .set({ count: sql`${vocab.count} + 1`, nextReview: new Date(now.getTime() + 7 * DAY_MS) })
+      .where(eq(vocab.phrase, phrase));
+  }
+
+  // Câu dùng được ngay mai: vào vocab với hạn 1 ngày để phiên sau nhắc lại.
+  for (const t of extraction.tomorrow) {
+    await db
+      .insert(vocab)
+      .values({ phrase: t.en, example: t.vi, count: 1, nextReview: new Date(now.getTime() + DAY_MS) })
+      .onConflictDoUpdate({
+        target: vocab.phrase,
+        set: { count: sql`${vocab.count} + 1`, nextReview: new Date(now.getTime() + DAY_MS) },
+      });
+  }
+
   const turnsMatched = await attachCorrectionsToTurns(db, sessionId, extraction.corrections);
 
   await db
@@ -181,6 +201,7 @@ export async function applyExtraction(
     corrections: extraction.corrections.length,
     phrases: extraction.new_phrases.length,
     turnsMatched,
+    tomorrow: extraction.tomorrow,
   };
 }
 
