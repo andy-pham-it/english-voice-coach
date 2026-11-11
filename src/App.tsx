@@ -469,6 +469,15 @@ function Session({ onFinished }: { onFinished: () => void }) {
   );
 }
 
+function speak(text: string) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'en-US';
+  u.rate = 0.85;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
 function Summary({ onContext, onHome }: { onContext: () => void; onHome: () => void }) {
   const [data, setData] = useState<EndResult | null>(() => {
     try {
@@ -496,6 +505,7 @@ function Summary({ onContext, onHome }: { onContext: () => void; onHome: () => v
         extract: 'done',
         items: result.items,
         phrases: result.phrases,
+        tomorrow: result.tomorrow,
       };
       setData(next);
       sessionStorage.setItem('summary', next.summary ?? '');
@@ -537,6 +547,25 @@ function Summary({ onContext, onHome }: { onContext: () => void; onHome: () => v
             </button>
             {err && <span className="error">{err}</span>}
           </div>
+        )}
+
+        {(data?.tomorrow?.length ?? 0) > 0 && (
+          <>
+            <h2>3 câu dùng ngay mai</h2>
+            <ul className="list">
+              {data!.tomorrow!.map((t, i) => (
+                <li key={i}>
+                  {i + 1}. “{t.en}”{' '}
+                  <button className="say" onClick={() => speak(t.en)}>
+                    Đọc
+                  </button>
+                  <div className="hint">
+                    {t.vi} · {t.tag}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
 
         {(data?.items?.length ?? 0) > 0 && (

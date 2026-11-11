@@ -292,3 +292,9 @@ label {
   max-height: 320px;
   overflow: auto;
 }
+
+.say {
+  padding: 2px 8px;
+  font-size: 12px;
+  vertical-align: middle;
+}
