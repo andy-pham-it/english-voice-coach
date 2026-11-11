@@ -211,5 +211,26 @@ const makeSession = () => {
   delete (globalThis as any).AudioContext;
 }
 
+// G. Gõ chữ: câu gõ phải đi đúng đường realtimeInput.text của Live API.
+{
+  FakeWs.all = [];
+  const session = new LiveSession({
+    onStatus: () => undefined,
+    onUserText: () => undefined,
+    onAiText: () => undefined,
+    onInterrupted: () => undefined,
+    onUsage: () => undefined,
+  });
+  session.connect('ws://fake/g', 'model');
+  const ws = FakeWs.all.at(-1)!;
+  session.sendText('hello');
+
+  check(
+    'gõ chữ gửi realtimeInput.text',
+    ws.sent.includes(JSON.stringify({ realtimeInput: { text: 'hello' } })),
+    JSON.stringify(ws.sent),
+  );
+}
+
 console.log(failures ? `\n${failures} FAIL` : '\nOK');
 if (failures) process.exitCode = 1;

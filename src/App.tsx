@@ -213,6 +213,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [resumed, setResumed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
 
   const liveRef = useRef<LiveSession | null>(null);
   const startedRef = useRef<{ id: number; model: string } | null>(null);
@@ -455,6 +456,27 @@ function Session({ onFinished }: { onFinished: () => void }) {
           Giữ để nói
         </button>
       )}
+
+      <form
+        className="row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const text = typed.trim();
+          if (!text) return;
+          liveRef.current?.sendText(text);
+          setTyped('');
+        }}
+      >
+        <input
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          placeholder="Không tiện nói? Gõ câu tiếng Anh…"
+          disabled={status === 'connecting' || status === 'closed'}
+        />
+        <button type="submit" disabled={!typed.trim() || status === 'connecting' || status === 'closed'}>
+          Gửi
+        </button>
+      </form>
 
       <div className="row">
         <button onClick={() => void rebrief()} disabled={rebriefing || status === 'closed'}>

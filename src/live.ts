@@ -179,7 +179,7 @@ export class LiveSession {
     this.handlers.onStatus('ready');
   }
 
-  private sendText(text: string): void {
+  sendText(text: string): void {
     this.ws?.send(JSON.stringify({ realtimeInput: { text } }));
   }
 
