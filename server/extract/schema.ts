@@ -32,7 +32,7 @@ export const extractionSchema = z.object({
   corrections: z.array(correctionSchema).max(MAX_CORRECTIONS).default([]),
   new_phrases: z.array(z.string().min(2).max(80)).max(MAX_NEW_PHRASES).default([]),
   tomorrow: z.array(tomorrowSchema).max(MAX_TOMORROW).default([]),
-  used_phrases: z.array(z.string().min(2).max(80)).max(5).default([]),
+  used_phrases: z.array(z.string().min(2).max(120)).max(5).default([]),
 });
 
 export type Correction = z.infer<typeof correctionSchema>;
@@ -76,7 +76,7 @@ export const extractionJsonSchema = {
         type: 'object',
         additionalProperties: false,
         properties: {
-          en: { type: 'string', description: 'Câu tiếng Anh hoàn chỉnh, dùng được ở chỗ làm' },
+          en: { type: 'string', maxLength: 120, description: 'Câu tiếng Anh hoàn chỉnh, dùng được ở chỗ làm' },
           vi: { type: 'string', description: 'Nghĩa tiếng Việt, ≤ 15 từ' },
           tag: { type: 'string', enum: [...TOMORROW_TAGS], description: 'Nơi câu được dùng' },
         },
@@ -86,7 +86,7 @@ export const extractionJsonSchema = {
     used_phrases: {
       type: 'array',
       maxItems: 5,
-      items: { type: 'string', description: 'Cụm trong danh sách Due for review mà người học đã dùng đúng' },
+      items: { type: 'string', maxLength: 120, description: 'Cụm trong danh sách Due for review mà người học đã dùng đúng' },
     },
   },
   required: ['topic', 'summary', 'corrections', 'new_phrases', 'tomorrow', 'used_phrases'],

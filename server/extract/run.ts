@@ -6,10 +6,11 @@
 //  2. `mistakes` unique trên `pattern`, nên `count` cộng dồn qua các phiên thay
 //     vì sinh ra 20 dòng trùng nghĩa.
 
-import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { mistakes, sessions, turns, usageDaily, vocab } from '../db/schema.js';
 import { env } from '../env.js';
+import { dueVocabQuery } from '../memory/brief.js';
 import { EXTRACT_SYSTEM, buildExtractPrompt, trimTranscript, type TranscriptTurn } from './prompt.js';
 import { parseJsonLoose, callProvider, GEMINI_EXTRACT_MODEL, type ExtractProvider } from './providers.js';
 import { extractionSchema, type Correction, type Extraction, type TomorrowPhrase } from './schema.js';
@@ -276,12 +277,7 @@ export async function extractAndStore(
 
   // Cụm đến hạn: cùng điều kiện với `dueVocab` trong brief, để LLM chỉ được
   // chọn `used_phrases` từ danh sách người học thực sự đang được nhắc.
-  const duePhrases = await db
-    .select({ phrase: vocab.phrase })
-    .from(vocab)
-    .where(or(isNull(vocab.nextReview), sql`${vocab.nextReview} <= now()`))
-    .orderBy(desc(vocab.count))
-    .limit(5);
+  const duePhrases = await dueVocabQuery(db);
 
   const run = await extractTranscript(rows, {
     topicHint: session.topic,
