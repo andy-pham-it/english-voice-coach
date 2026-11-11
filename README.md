@@ -29,6 +29,9 @@ start of session N+1: Postgres → brief (≤1000 tokens) → systemInstruction
 ```
 
 The brief is stored verbatim in `sessions.brief`, so the Context tab shows exactly what the model read.
+
+After each session you get three rewritten sentences you can actually use tomorrow (with a Vietnamese gloss
+and a read-aloud button), and they come back in the next brief for review.
 The History tab lists past sessions and expands each one into its corrections and full transcript.
 
 ## Stack
@@ -117,6 +120,7 @@ drizzle/              generated SQL migrations
 - No per-turn context injection: the brief is fixed at connect time. The `Nhắc AI` button
   reconnects with a fresh brief when the conversation drifts.
 - Corrections are extracted after the session, not while speaking.
+- Pronunciation is not scored, and the read-aloud button uses the phone's own text-to-speech voice.
 - Ephemeral tokens expire after 30 minutes; a reconnect issues a new one.
 - A session dropped by accident (tab closed, phone locked) is resumed if you come back within
   15 minutes: the timer continues from the original start, so `durationSec` stays honest. After

@@ -29,6 +29,9 @@ cuối phiên N:    transcript → LLM trích xuất (Groq) → Postgres
 ```
 
 Brief được lưu nguyên văn vào `sessions.brief`, nên tab Context hiện đúng thứ model đã đọc.
+
+Sau mỗi phiên có 3 câu viết lại để dùng được ngay hôm sau (kèm nghĩa tiếng Việt và nút đọc),
+và chúng quay lại trong brief phiên sau để ôn.
 Tab History liệt kê các phiên cũ, mở ra xem lỗi đã sửa và toàn bộ transcript.
 
 ## Stack
@@ -116,6 +119,7 @@ drizzle/              migration SQL đã sinh
 - Không chèn ngữ cảnh theo từng lượt: brief cố định lúc kết nối. Nút `Nhắc AI` nối lại với brief mới
   khi cuộc nói chuyện đổi chủ đề.
 - Correction được trích xuất sau phiên, không phải ngay lúc đang nói.
+- Không chấm phát âm; nút Đọc dùng giọng text-to-speech của máy.
 - Ephemeral token hết hạn sau 30 phút; nối lại sẽ cấp token mới.
 - Phiên bị rớt (đóng tab, khoá máy) sẽ được nối tiếp nếu bạn quay lại trong 15 phút: đồng hồ
   chạy tiếp từ lúc bắt đầu nên `durationSec` vẫn đúng. Quá 15 phút thì phiên bị đánh dấu
