@@ -19,7 +19,10 @@ export const EXTRACT_SYSTEM = [
   `9. \`new_phrases\`: at most ${MAX_NEW_PHRASES} short phrases the LEARNER used correctly and should reuse. Not phrases the AI said.`,
   '10. `topic` and `summary` are in English; `summary` is 2-3 sentences about what was discussed, not about errors.',
   '11. If the learner made no clear error, return an empty corrections array. That is a valid answer.',
-  '12. Reply with a single JSON object only, matching the given shape. No prose, no markdown code fences.',
+  '12. `tomorrow`: up to 3 complete English sentences the learner can say at work tomorrow, each rewritten from a real mistake in the transcript — not grammar explanations, not new topics.',
+  '13. `tomorrow[].vi` is a Vietnamese gloss, at most 15 words. `tag` is where the sentence is used.',
+  '14. `used_phrases`: only phrases from the DUE list in the prompt that the learner actually used correctly. Empty array if none.',
+  '15. Reply with a single JSON object only, matching the given shape. No prose, no markdown code fences.',
 ].join('\n');
 
 export interface TranscriptTurn {
@@ -36,13 +39,22 @@ export function renderTranscript(turns: TranscriptTurn[]): string {
 
 export function buildExtractPrompt(
   turns: TranscriptTurn[],
-  context: { topicHint?: string | null; durationSec?: number | null; topMistakes?: string[] } = {},
+  context: {
+    topicHint?: string | null;
+    durationSec?: number | null;
+    topMistakes?: string[];
+    duePhrases?: string[];
+  } = {},
 ): string {
   const lines: string[] = [];
   if (context.topicHint) lines.push(`Session topic (working title): ${context.topicHint}`);
   if (context.durationSec) lines.push(`Duration: ${Math.round(context.durationSec / 60)} minutes`);
   if (context.topMistakes?.length) {
     lines.push(`Mistakes this learner repeats often, watch for them: ${context.topMistakes.join(', ')}`);
+  }
+  if (context.duePhrases?.length) {
+    lines.push('Phrases due for review (only fill used_phrases from this list):');
+    for (const phrase of context.duePhrases) lines.push(`- "${phrase}"`);
   }
   lines.push('', 'Transcript:', renderTranscript(turns));
   return lines.join('\n');

@@ -170,6 +170,15 @@ try {
   check('corrections > 0', result.corrections > 0, `${result.corrections}`);
   check('corrections ≤ 5', result.corrections <= 5);
 
+  // Fixture có lỗi thật nên phải sinh được câu dùng ngay mai; "0 câu" là
+  // trạng thái chưa có tính năng, không phải trạng thái đúng.
+  const tomorrow = result.extraction.tomorrow ?? [];
+  check('tomorrow 1–3 câu', tomorrow.length >= 1 && tomorrow.length <= 3, `${tomorrow.length}`);
+  check(
+    'mỗi câu tomorrow có en + vi + tag',
+    tomorrow.every((t) => t.en.length >= 8 && t.vi.length >= 4 && !!t.tag),
+  );
+
   const written = await db
     .select({ pattern: mistakes.pattern, wrong: mistakes.wrong, right: mistakes.right, count: mistakes.count })
     .from(mistakes)
@@ -213,6 +222,8 @@ try {
       summary: 'y',
       corrections: [{ pattern: 'past_tense', wrong: 'a', right: 'b', note: '' }],
       new_phrases: [],
+      tomorrow: [],
+      used_phrases: [],
     },
     { provider: 'test', model: 'test', tokens: 0 },
   );

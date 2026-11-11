@@ -6,7 +6,7 @@
 //  2. `mistakes` unique trên `pattern`, nên `count` cộng dồn qua các phiên thay
 //     vì sinh ra 20 dòng trùng nghĩa.
 
-import { and, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { mistakes, sessions, turns, usageDaily, vocab } from '../db/schema.js';
 import { env } from '../env.js';
@@ -25,6 +25,8 @@ export interface ExtractContext {
   topicHint?: string | null;
   durationSec?: number | null;
   topMistakes?: string[];
+  /** Cụm đang đến hạn — chỉ những cụm này mới được tính là `used_phrases`. */
+  duePhrases?: string[];
 }
 
 export interface ExtractOptions {
@@ -251,10 +253,20 @@ export async function extractAndStore(
     .orderBy(sql`${mistakes.count} desc`)
     .limit(5);
 
+  // Cụm đến hạn: cùng điều kiện với `dueVocab` trong brief, để LLM chỉ được
+  // chọn `used_phrases` từ danh sách người học thực sự đang được nhắc.
+  const duePhrases = await db
+    .select({ phrase: vocab.phrase })
+    .from(vocab)
+    .where(or(isNull(vocab.nextReview), sql`${vocab.nextReview} <= now()`))
+    .orderBy(desc(vocab.count))
+    .limit(5);
+
   const run = await extractTranscript(rows, {
     topicHint: session.topic,
     durationSec: session.durationSec,
     topMistakes: topMistakes.map((m) => m.pattern),
+    duePhrases: duePhrases.map((v) => v.phrase),
   }, options);
 
   const applied = await applyExtraction(db, sessionId, run.extraction, {
