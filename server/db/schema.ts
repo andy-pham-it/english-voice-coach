@@ -70,6 +70,8 @@ export const sessions = pgTable('sessions', {
   /** Nguyên văn systemInstruction đã nạp — bản chụp, không render lại. */
   brief: text('brief'),
   briefTokens: integer('brief_tokens'),
+  /** 3 câu dùng được ở chỗ làm, sinh từ lỗi của chính phiên này. */
+  tomorrow: jsonb('tomorrow').$type<{ en: string; vi: string; tag: string }[]>(),
   liveModel: text('live_model'),
   mode: text('mode', { enum: SESSION_MODES }),
   status: text('status', { enum: SESSION_STATUSES }).notNull().default('active'),
