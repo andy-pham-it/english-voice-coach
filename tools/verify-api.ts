@@ -244,7 +244,16 @@ try {
   const end2Body = await end2.json();
   check('end lần 2 idempotent', end2.status === 200 && end2Body.alreadyEnded === true);
 
-  // 14. mistake không tồn tại → 404
+  // 14. extract lần nữa trả 3 câu dùng ngay mai (idempotent, đọc từ DB)
+  const ex = await call(`/api/session/${sessionId}/extract`, { method: 'POST' }, cookie);
+  const exBody = await ex.json();
+  check(
+    'extract trả tomorrow',
+    ex.status === 200 && Array.isArray(exBody.tomorrow) && exBody.tomorrow.length <= 3,
+    `tomorrow=${JSON.stringify(exBody.tomorrow ?? null).slice(0, 120)}`,
+  );
+
+  // 15. mistake không tồn tại → 404
   const del = await call('/api/mistakes/999999999', { method: 'DELETE' }, cookie);
   check('xoá mistake lạ → 404', del.status === 404);
 } catch (error) {

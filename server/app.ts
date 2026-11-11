@@ -219,6 +219,7 @@ export function createApp() {
         corrections: result.corrections,
         items: result.extraction.corrections,
         phrases: result.extraction.new_phrases,
+        tomorrow: result.extraction.tomorrow,
       });
     } catch (error) {
       return fail(c, error);
