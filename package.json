@@ -31,6 +31,7 @@
     "dev:spike": "node tools/dev-server.mjs",
     "build": "vite build",
     "preview": "vite preview",
+    "deploy": "vercel --prod",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

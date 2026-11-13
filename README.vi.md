@@ -108,7 +108,7 @@ Các script verify ghi dữ liệu thật rồi khôi phục trạng thái cũ, 
 ## Deploy
 
 ```bash
-npx vercel --prod --yes
+npm run deploy      # tương đương: npx vercel --prod --yes
 ```
 
 `vercel.json` cố ý dùng dạng `builds`/`routes` legacy: preset Vite tự chèn route
@@ -116,6 +116,9 @@ npx vercel --prod --yes
 
 - Import tương đối trong `server/` và `api/` phải có đuôi `.js` (function build ra ESM).
 - `tsconfig.json` không được đặt `"types": ["node"]`, nếu không build fail `TS2688`.
+- Có hai project Vercel chỉ khác nhau một chữ. `english-voice-coach` là project này và phục vụ
+  `-five.vercel.app`. `english-voice-coaching` được tạo thiếu biến môi trường nên trả 500 ở mọi
+  route — xem tên trong `vercel ls` trước khi kết luận là deploy không chạy.
 
 Env production: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `GEMINI_API_KEY`, `GROQ_API_KEY`,
 `ACCESS_CODE`, `AUTH_SECRET`, `SPIKE_LOG_KEY`.

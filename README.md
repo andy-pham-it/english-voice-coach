@@ -108,7 +108,7 @@ against the dev branch. Do not point them at production data.
 ## Deploying
 
 ```bash
-npx vercel --prod --yes
+npm run deploy      # same as: npx vercel --prod --yes
 ```
 
 `vercel.json` uses the legacy `builds`/`routes` form on purpose: the Vite preset injects a
@@ -117,6 +117,9 @@ real debugging time:
 
 - Relative imports under `server/` and `api/` must end in `.js` (the function builds as ESM).
 - `tsconfig.json` must not set `"types": ["node"]`, or the function build fails with `TS2688`.
+- There are two Vercel projects one letter apart. `english-voice-coach` is this one, behind
+  `-five.vercel.app`. `english-voice-coaching` was created without the environment variables and
+  answers 500 on every route, so check `vercel ls` names before deciding a deploy did not work.
 
 Production env vars: `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `GEMINI_API_KEY`, `GROQ_API_KEY`,
 `ACCESS_CODE`, `AUTH_SECRET`, `SPIKE_LOG_KEY`.
