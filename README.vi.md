@@ -11,6 +11,12 @@ và mang ra nhắc ở phiên sau.
 - **Test plan:** [docs/02-test-plan.md](./docs/02-test-plan.md)
 - **Cách chạy 3 bài test spike:** [docs/03-run-tests.md](./docs/03-run-tests.md)
 
+## Tình trạng
+
+Tự viết cho mình với đúng một người dùng, và đã deploy. Đây là app thật chứ không phải demo: chỉ có
+một access code, toàn bộ data model xoay quanh một người học, và các lỗi nó lưu lại là để dùng vào
+ngày hôm sau. Mọi thứ bên dưới mô tả thứ đang chạy, không phải kế hoạch.
+
 ## Cách hoạt động
 
 ```
@@ -43,6 +49,21 @@ Tab History liệt kê các phiên cũ, mở ra xem lỗi đã sửa và toàn b
 | API | Hono trên Vercel Functions | một file, không framework |
 | DB | Neon Postgres + Drizzle | full-text tsvector, free tier, branching |
 | Client | React 19 + Vite | pipeline audio bằng WebAudio thuần |
+
+## Nên đọc gì trước
+
+Phần lớn quyết định thiết kế nằm ở bốn chỗ:
+
+- [`server/memory/brief.ts`](./server/memory/brief.ts) — biến database thành một prompt trong ngân
+  sách token cố định: chia hạn mức từng phần, cắt ở ranh giới từ, và state tính bằng SQL chứ không
+  để model viết.
+- [`src/live.ts`](./src/live.ts) — pipeline WebSocket + AudioWorklet tự viết (16 kHz lên, 24 kHz
+  xuống), gồm cả bộ resample sinh ra vì Chrome trên Android bỏ qua
+  `new AudioContext({ sampleRate: 16000 })`.
+- [`server/extract/`](./server/extract) — trích xuất có ràng buộc schema trên Groq, và luật là model
+  chỉ được chọn những cụm người học đã được hiện ra trước đó.
+- [`server/session/service.ts`](./server/session/service.ts) — vòng đời phiên và đường nối lại giữ
+  cho `durationSec` vẫn đúng khi khoá máy hoặc đóng tab.
 
 ## Chạy local
 

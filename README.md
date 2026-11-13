@@ -11,6 +11,12 @@ wrong and brings it back next time.
 - **Test plan:** [docs/02-test-plan.md](./docs/02-test-plan.md)
 - **How to run the spike tests:** [docs/03-run-tests.md](./docs/03-run-tests.md)
 
+## Status
+
+Built for myself as the only user, and deployed. It is a real app rather than a demo: there is one
+access code, the whole data model is shaped around a single learner, and the corrections it stores
+are meant to be used the next day. Everything below describes what runs in production, not a plan.
+
 ## How it works
 
 ```
@@ -43,6 +49,21 @@ The History tab lists past sessions and expands each one into its corrections an
 | API | Hono on Vercel Functions | one file, no framework |
 | DB | Neon Postgres + Drizzle | tsvector search, free tier, branching |
 | Client | React 19 + Vite | audio pipeline in plain WebAudio |
+
+## Reading guide
+
+Most of the design work sits in four places:
+
+- [`server/memory/brief.ts`](./server/memory/brief.ts) — turning a database into one prompt under a
+  fixed token budget: per-section caps, clipping at word boundaries, and state computed in SQL
+  rather than written by a model.
+- [`src/live.ts`](./src/live.ts) — hand-rolled WebSocket + AudioWorklet pipeline (16 kHz up, 24 kHz
+  down), including the resampler that exists because Chrome on Android ignores
+  `new AudioContext({ sampleRate: 16000 })`.
+- [`server/extract/`](./server/extract) — schema-constrained extraction on Groq, and the rule that
+  the model may only pick phrases the learner has already been shown.
+- [`server/session/service.ts`](./server/session/service.ts) — session lifecycle and the reconnect
+  path that keeps `durationSec` honest when the phone locks or the tab closes.
 
 ## Local development
 
