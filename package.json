@@ -20,7 +20,8 @@
     "pg": "^8.23.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.6"
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
   },
   "name": "english-voice-coach",
   "private": true,
@@ -41,7 +42,10 @@
     "verify:extract": "tsx tools/verify-extract.ts",
     "verify:api": "tsx tools/verify-api.ts",
     "db:reset": "tsx tools/reset-dev.ts",
-    "verify:live-close": "tsx tools/verify-live-close.ts"
+    "verify:live-close": "tsx tools/verify-live-close.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify:schedule": "tsx tools/verify-schedule.ts"
   },
   "engines": {
     "node": "22.x"

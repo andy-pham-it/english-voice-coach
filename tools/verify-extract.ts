@@ -12,6 +12,7 @@ import { mistakes, sessions, turns, usageDaily, vocab } from '../server/db/schem
 import { extractAndStore, applyExtraction } from '../server/extract/run.js';
 import { extractionSchema } from '../server/extract/schema.js';
 import { dueVocabQuery } from '../server/memory/brief.js';
+import { REVIEW_LADDER_DAYS } from '../server/review/schedule.js';
 
 const text = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
 for (const line of text.split('\n')) {
@@ -275,7 +276,7 @@ try {
     tag: 'standup' as const,
   };
   const pushBefore = await db
-    .select({ count: vocab.count, nextReview: vocab.nextReview })
+    .select({ count: vocab.count, streak: vocab.streak, nextReview: vocab.nextReview })
     .from(vocab)
     .where(eq(vocab.phrase, 'push back'));
   const fixtureExtraction = {
@@ -285,6 +286,7 @@ try {
     new_phrases: [],
     tomorrow: [fixtureTomorrow],
     used_phrases: ['push back'],
+    fixed_patterns: [],
   };
   await applyExtraction(db, sid2, fixtureExtraction, { provider: 'test', model: 'test', tokens: 0 });
   const runOnce = await db.select().from(vocab).where(eq(vocab.phrase, 'push back'));
@@ -292,8 +294,14 @@ try {
   const creditedDays = runOnce[0]?.nextReview
     ? Math.round((runOnce[0].nextReview.getTime() - Date.now()) / 86_400_000)
     : null;
+  const streakBefore = pushBefore[0]?.streak ?? 0;
+  const expectedDays = REVIEW_LADDER_DAYS[Math.min(streakBefore, REVIEW_LADDER_DAYS.length - 1)]!;
   check('cụm đã dùng được cộng đúng 1', credited === 1, `${credited}`);
-  check('cụm đã dùng hẹn ôn sau ~7 ngày', creditedDays !== null && creditedDays >= 6 && creditedDays <= 8, `${creditedDays} ngày`);
+  check(
+    `cụm đã dùng leo bậc ${streakBefore} → ${runOnce[0]?.streak}, hẹn ${expectedDays} ngày`,
+    runOnce[0]?.streak === streakBefore + 1 && creditedDays === expectedDays,
+    `${runOnce[0]?.streak ?? '?'} / ${creditedDays} ngày`,
+  );
 
   const fixtureRow = await db.select().from(vocab).where(eq(vocab.phrase, fixtureTomorrow.en));
   const fixtureDays = fixtureRow[0]?.nextReview
@@ -325,6 +333,7 @@ try {
       new_phrases: [],
       tomorrow: [],
       used_phrases: [],
+      fixed_patterns: [],
     },
     { provider: 'test', model: 'test', tokens: 0 },
   );

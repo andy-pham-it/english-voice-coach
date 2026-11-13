@@ -112,6 +112,8 @@ export const mistakes = pgTable('mistakes', {
   right: text('right').notNull(),
   note: text('note'),
   count: integer('count').notNull().default(1),
+  /** Chuỗi lần dùng đúng liên tiếp. Xem server/review/schedule.ts. */
+  streak: integer('streak').notNull().default(0),
   firstSeen: timestamp('first_seen', { withTimezone: true }).notNull().defaultNow(),
   lastSeen: timestamp('last_seen', { withTimezone: true }).notNull().defaultNow(),
   nextReview: timestamp('next_review', { withTimezone: true }),
@@ -126,6 +128,8 @@ export const vocab = pgTable('vocab', {
   phrase: text('phrase').notNull().unique(),
   example: text('example'),
   count: integer('count').notNull().default(1),
+  /** Chuỗi lần dùng đúng liên tiếp. Xem server/review/schedule.ts. */
+  streak: integer('streak').notNull().default(0),
   nextReview: timestamp('next_review', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });

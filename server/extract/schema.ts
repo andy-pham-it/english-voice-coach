@@ -8,6 +8,7 @@ import { MISTAKE_PATTERNS } from '../db/schema.js';
 export const MAX_CORRECTIONS = 5;
 export const MAX_NEW_PHRASES = 5;
 export const MAX_TOMORROW = 3;
+export const MAX_FIXED_PATTERNS = 3;
 
 /** Nơi câu sẽ được dùng — cố định để client lọc/nhóm mà không phải đoán chuỗi. */
 export const TOMORROW_TAGS = ['standup', 'review', 'meeting', 'interview', 'smalltalk'] as const;
@@ -33,6 +34,12 @@ export const extractionSchema = z.object({
   new_phrases: z.array(z.string().min(2).max(80)).max(MAX_NEW_PHRASES).default([]),
   tomorrow: z.array(tomorrowSchema).max(MAX_TOMORROW).default([]),
   used_phrases: z.array(z.string().min(2).max(120)).max(5).default([]),
+  /**
+   * Pattern lỗi trong danh sách "hay lặp lại" mà phiên này người học đã dùng
+   * đúng. Không có tín hiệu này thì `mistakes` chỉ cộng chứ không bao giờ được
+   * ghi nhận là đã sửa, nên bị nhắc lại mãi.
+   */
+  fixed_patterns: z.array(z.enum(MISTAKE_PATTERNS)).max(MAX_FIXED_PATTERNS).default([]),
 });
 
 export type Correction = z.infer<typeof correctionSchema>;
@@ -88,6 +95,15 @@ export const extractionJsonSchema = {
       maxItems: 5,
       items: { type: 'string', maxLength: 120, description: 'Cụm trong danh sách Due for review mà người học đã dùng đúng' },
     },
+    fixed_patterns: {
+      type: 'array',
+      maxItems: MAX_FIXED_PATTERNS,
+      items: {
+        type: 'string',
+        enum: [...MISTAKE_PATTERNS],
+        description: 'Pattern trong danh sách Mistakes this learner repeats often mà phiên này đã dùng đúng',
+      },
+    },
   },
-  required: ['topic', 'summary', 'corrections', 'new_phrases', 'tomorrow', 'used_phrases'],
+  required: ['topic', 'summary', 'corrections', 'new_phrases', 'tomorrow', 'used_phrases', 'fixed_patterns'],
 } as const;

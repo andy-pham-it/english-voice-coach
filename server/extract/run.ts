@@ -6,11 +6,12 @@
 //  2. `mistakes` unique trên `pattern`, nên `count` cộng dồn qua các phiên thay
 //     vì sinh ra 20 dòng trùng nghĩa.
 
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { mistakes, sessions, turns, usageDaily, vocab } from '../db/schema.js';
 import { env } from '../env.js';
 import { dueVocabQuery } from '../memory/brief.js';
+import { RELEARN_DAYS, scheduleReview } from '../review/schedule.js';
 import { EXTRACT_SYSTEM, buildExtractPrompt, trimTranscript, type TranscriptTurn } from './prompt.js';
 import { parseJsonLoose, callProvider, GEMINI_EXTRACT_MODEL, type ExtractProvider } from './providers.js';
 import { extractionSchema, type Correction, type Extraction, type TomorrowPhrase } from './schema.js';
@@ -87,12 +88,14 @@ export interface ApplyResult {
   tomorrow: TomorrowPhrase[];
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 /**
  * Ghi kết quả trích xuất. Gọi lại nhiều lần cho cùng một phiên phải an toàn:
  * `mistakes.count` chỉ cộng khi correction chưa từng được ghi cho phiên đó —
  * kiểm tra bằng cách so `sessions.summary` trước khi ghi.
+ *
+ * Lịch ôn do `scheduleReview` quyết định, không còn hằng số rải rác ở đây: mỗi
+ * mục mang theo `streak` (số lần đúng liên tiếp) để lần đúng thứ n đẩy hạn xa
+ * dần, và sai lại thì kéo về 1 ngày.
  */
 export async function applyExtraction(
   db: Db,
@@ -125,7 +128,35 @@ export async function applyExtraction(
     return { sessionId, corrections: 0, phrases: 0, turnsMatched: 0, tomorrow: (session.tomorrow ?? []) as TomorrowPhrase[] };
   }
 
+  // Chuỗi đúng hiện có phải đọc trước khi ghi: quyết định hạn ôn dựa trên nó,
+  // và cùng một cụm có thể vừa xuất hiện ở new_phrases vừa ở used_phrases.
+  const correctionPatterns = extraction.corrections.map((c) => c.pattern);
+  // Pattern vừa bị sửa trong phiên này thì vẫn tính là lỗi tái phát, không tính
+  // là đã sửa — nếu không, một câu sai rồi tự sửa sẽ được thưởng oan.
+  const fixedPatterns = extraction.fixed_patterns.filter((p) => !correctionPatterns.includes(p));
+  const vocabPhrases = [...new Set([...extraction.new_phrases, ...extraction.used_phrases])];
+
+  const mistakeStreak = new Map<string, number>();
+  if (correctionPatterns.length || fixedPatterns.length) {
+    const rows = await db
+      .select({ pattern: mistakes.pattern, streak: mistakes.streak })
+      .from(mistakes)
+      .where(inArray(mistakes.pattern, [...new Set([...correctionPatterns, ...fixedPatterns])]));
+    for (const r of rows) mistakeStreak.set(r.pattern, r.streak);
+  }
+
+  const vocabStreak = new Map<string, number>();
+  if (vocabPhrases.length) {
+    const rows = await db
+      .select({ phrase: vocab.phrase, streak: vocab.streak })
+      .from(vocab)
+      .where(inArray(vocab.phrase, vocabPhrases));
+    for (const r of rows) vocabStreak.set(r.phrase, r.streak);
+  }
+
+  // Lỗi tái phát: đứt chuỗi, hẹn lại ngày mai.
   for (const c of extraction.corrections) {
+    const s = scheduleReview(now, 'again', mistakeStreak.get(c.pattern) ?? 0);
     await db
       .insert(mistakes)
       .values({
@@ -134,8 +165,9 @@ export async function applyExtraction(
         right: c.right,
         note: c.note,
         count: 1,
+        streak: s.streak,
         lastSeen: now,
-        nextReview: new Date(now.getTime() + DAY_MS),
+        nextReview: s.nextReview,
       })
       .onConflictDoUpdate({
         target: mistakes.pattern,
@@ -144,43 +176,55 @@ export async function applyExtraction(
           right: c.right,
           note: c.note,
           count: sql`${mistakes.count} + 1`,
+          streak: s.streak,
           lastSeen: now,
-          nextReview: new Date(now.getTime() + DAY_MS),
+          nextReview: s.nextReview,
           active: true,
         },
       });
   }
 
-  // Cụm từ tốt: lần đầu thì đến hạn ôn sau 3 ngày, gặp lại thì đẩy xa hơn.
+  // Lỗi cũ mà phiên này đã dùng đúng: cộng chuỗi, đẩy hạn xa dần; đủ chuỗi thì
+  // rời danh sách nhắc và không còn nằm trong prompt của các phiên sau.
+  for (const pattern of fixedPatterns) {
+    const s = scheduleReview(now, 'correct', mistakeStreak.get(pattern) ?? 0);
+    await db
+      .update(mistakes)
+      .set({ streak: s.streak, nextReview: s.nextReview, active: !s.graduated })
+      .where(eq(mistakes.pattern, pattern));
+  }
+
+  // Cụm từ tốt người học tự dùng đúng: cũng leo bậc như trên.
   for (const phrase of extraction.new_phrases) {
+    const s = scheduleReview(now, 'correct', vocabStreak.get(phrase) ?? 0);
     await db
       .insert(vocab)
-      .values({ phrase, count: 1, nextReview: new Date(now.getTime() + 3 * DAY_MS) })
+      .values({ phrase, count: 1, streak: s.streak, nextReview: s.nextReview })
       .onConflictDoUpdate({
         target: vocab.phrase,
-        set: {
-          count: sql`${vocab.count} + 1`,
-          nextReview: new Date(now.getTime() + 7 * DAY_MS),
-        },
+        set: { count: sql`${vocab.count} + 1`, streak: s.streak, nextReview: s.nextReview },
       });
   }
 
-  // Cụm đến hạn mà người học đã dùng đúng: đẩy hạn ôn xa 7 ngày.
+  // Cụm đến hạn mà người học đã dùng đúng trong phiên này.
   for (const phrase of extraction.used_phrases) {
+    const s = scheduleReview(now, 'correct', vocabStreak.get(phrase) ?? 0);
     await db
       .update(vocab)
-      .set({ count: sql`${vocab.count} + 1`, nextReview: new Date(now.getTime() + 7 * DAY_MS) })
+      .set({ count: sql`${vocab.count} + 1`, streak: s.streak, nextReview: s.nextReview })
       .where(eq(vocab.phrase, phrase));
   }
 
-  // Câu dùng được ngay mai: vào vocab với hạn 1 ngày để phiên sau nhắc lại.
+  // Câu dùng được ngay mai: chưa phải bằng chứng đã nhớ, nên không leo bậc —
+  // cố định 1 ngày để phiên sau nhắc lại, leo bậc chỉ khi thực sự dùng đúng.
   for (const t of extraction.tomorrow) {
+    const nextReview = new Date(now.getTime() + RELEARN_DAYS * 24 * 60 * 60 * 1000);
     await db
       .insert(vocab)
-      .values({ phrase: t.en, example: t.vi, count: 1, nextReview: new Date(now.getTime() + DAY_MS) })
+      .values({ phrase: t.en, example: t.vi, count: 1, streak: 0, nextReview })
       .onConflictDoUpdate({
         target: vocab.phrase,
-        set: { count: sql`${vocab.count} + 1`, nextReview: new Date(now.getTime() + DAY_MS) },
+        set: { count: sql`${vocab.count} + 1`, streak: 0, nextReview },
       });
   }
 

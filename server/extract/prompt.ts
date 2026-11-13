@@ -22,7 +22,8 @@ export const EXTRACT_SYSTEM = [
   '12. `tomorrow`: up to 3 complete English sentences the learner can say at work tomorrow, each rewritten from a real mistake in the transcript — not grammar explanations, not new topics.',
   '13. `tomorrow[].vi` is a Vietnamese gloss, at most 15 words. `tag` is where the sentence is used.',
   '14. `used_phrases`: only phrases from the DUE list in the prompt that the learner actually used correctly. Empty array if none.',
-  '15. Reply with a single JSON object only, matching the given shape. No prose, no markdown code fences.',
+  '15. `fixed_patterns`: only values from the "Mistakes this learner repeats often" list that the learner got right at least once in this transcript. Must be enum values, not the wrong text. Empty array if none was fixed.',
+  '16. Reply with a single JSON object only, matching the given shape. No prose, no markdown code fences.',
 ].join('\n');
 
 export interface TranscriptTurn {
