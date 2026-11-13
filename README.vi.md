@@ -21,6 +21,7 @@ ngày hôm sau. Mọi thứ bên dưới mô tả thứ đang chạy, không ph�
 
 ```
 Home → Recap (lỗi lặp + từ đến hạn) → Session (Gemini Live, full-duplex) → Summary → Home
+                            ↳ Drill (không audio: tự chấm những gì đã đến hạn)
 ```
 
 Ở Home bạn gõ được chủ đề (hoặc bấm chip: daily standup, code review, technical disagreement,
@@ -39,6 +40,11 @@ Brief được lưu nguyên văn vào `sessions.brief`, nên tab Context hiện 
 Sau mỗi phiên có 3 câu viết lại để dùng được ngay hôm sau (kèm nghĩa tiếng Việt và nút đọc),
 và chúng quay lại trong brief phiên sau để ôn.
 Tab History liệt kê các phiên cũ, mở ra xem lỗi đã sửa và toàn bộ transcript.
+
+Drill là đường vào rẻ nhất: từng thẻ một, không micro, không tốn token Live API. Nó chỉ hiện thứ
+thật sự đến hạn, và mỗi câu trả lời đặt lại hạn cho item đó — sai thì về ngày mai, đúng thì leo
+bậc 3/7/14/30 ngày cho tới khi tốt nghiệp. Cùng một chính sách đó điều khiển phần ôn trong brief
+phiên sau, nên ôn bằng Drill thật sự thay đổi thứ AI sẽ hỏi.
 
 ## Stack
 

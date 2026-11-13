@@ -45,7 +45,8 @@
     "verify:live-close": "tsx tools/verify-live-close.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify:schedule": "tsx tools/verify-schedule.ts"
+    "verify:schedule": "tsx tools/verify-schedule.ts",
+    "verify:drill": "tsx tools/verify-drill.ts"
   },
   "engines": {
     "node": "22.x"

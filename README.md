@@ -21,6 +21,7 @@ are meant to be used the next day. Everything below describes what runs in produ
 
 ```
 Home → Recap (mistakes + due phrases) → Session (Gemini Live, full-duplex) → Summary → Home
+                              ↳ Drill (no audio: self-graded review of what is due)
 ```
 
 On Home you can type a topic (or tap a chip: daily standup, code review, technical disagreement,
@@ -39,6 +40,11 @@ The brief is stored verbatim in `sessions.brief`, so the Context tab shows exact
 After each session you get three rewritten sentences you can actually use tomorrow (with a Vietnamese gloss
 and a read-aloud button), and they come back in the next brief for review.
 The History tab lists past sessions and expands each one into its corrections and full transcript.
+
+Drill is the cheap way back in: a card at a time, no microphone, no Live API tokens. It shows only what is
+actually due, and every answer reschedules that item — wrong drops it back to tomorrow, right moves it along
+a 3/7/14/30-day ladder until it graduates. The same policy drives the review section of the next brief, so
+reviewing in Drill genuinely changes what the AI asks about.
 
 ## Stack
 

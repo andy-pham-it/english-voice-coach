@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError, type ContextResult, type EndResult, type SessionDetail, type SessionListItem, type StartResult, type TurnEvent } from './api';
+import { api, ApiError, type ContextResult, type DrillItem, type EndResult, type SessionDetail, type SessionListItem, type StartResult, type TurnEvent } from './api';
 import { LiveSession, type LiveStatus } from './live';
 import { probeMicrophone, type MicProbe } from './mic';
 
-type View = 'home' | 'session' | 'summary' | 'context' | 'history';
+type View = 'home' | 'session' | 'summary' | 'context' | 'history' | 'drill';
+
+const TAB_LABEL = { home: 'Home', drill: 'Drill', history: 'History', context: 'Context' } as const;
 
 const fmtTime = (sec: number): string =>
   `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
@@ -43,9 +45,9 @@ export default function App() {
   return (
     <div className="app">
       <nav className="tabs">
-        {(['home', 'history', 'context'] as const).map((v) => (
+        {(['home', 'drill', 'history', 'context'] as const).map((v) => (
           <button key={v} className={view === v ? 'tab on' : 'tab'} onClick={() => setView(v)}>
-            {v === 'home' ? 'Home' : v === 'history' ? 'History' : 'Context'}
+            {TAB_LABEL[v]}
           </button>
         ))}
         {view === 'session' && <span className="tab on">Session</span>}
@@ -70,6 +72,8 @@ export default function App() {
       {view === 'summary' && <Summary onContext={() => setView('context')} onHome={() => setView('home')} />}
 
       {view === 'history' && <History />}
+
+      {view === 'drill' && <Drill />}
 
       {view === 'context' && ctx && (
         <Context ctx={ctx} reload={loadContext} />
@@ -819,6 +823,185 @@ function History() {
           ))}
         </ul>
       </section>
+    </main>
+  );
+}
+
+/**
+ * Ôn nhanh, không dùng Live API: chỉ đọc item đã đến hạn và ghi kết quả tự chấm.
+ * Lịch do server quyết định (server/review/schedule.ts); client không gửi mốc thời gian.
+ */
+function Drill() {
+  const [items, setItems] = useState<DrillItem[] | null>(null);
+  const [error, setError] = useState('');
+  const [index, setIndex] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [tally, setTally] = useState({ correct: 0, again: 0 });
+  const [toast, setToast] = useState('');
+
+  const load = useCallback(async () => {
+    setItems(null);
+    setError('');
+    setIndex(0);
+    setRevealed(false);
+    setTally({ correct: 0, again: 0 });
+    setToast('');
+    try {
+      setItems((await api.drillDue(12)).items);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'không tải được danh sách ôn');
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const current = items?.[index];
+
+  const grade = useCallback(
+    async (outcome: 'again' | 'correct') => {
+      if (!current || busy) return;
+      setBusy(true);
+      try {
+        const res = await api.drillAnswer(current.kind, current.id, outcome);
+        const days = Math.max(1, Math.round((Date.parse(res.nextReview) - Date.now()) / 86_400_000));
+        setToast(`${outcome === 'correct' ? 'đúng' : 'sai'} → ôn lại sau ${days} ngày`);
+        setTally((t) => ({ ...t, [outcome]: t[outcome] + 1 }));
+        setRevealed(false);
+        setIndex((i) => i + 1);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'không ghi được kết quả');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [current, busy],
+  );
+
+  // Space/Enter hiện đáp án, ← sai, → đúng. Trên điện thoại vẫn dùng nút.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!current) return;
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        if (!revealed) setRevealed(true);
+        return;
+      }
+      if (!revealed) return;
+      if (e.key === 'ArrowLeft' || e.key === '1') void grade('again');
+      if (e.key === 'ArrowRight' || e.key === '2') void grade('correct');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [current, revealed, grade]);
+
+  if (error) return <p className="error">{error}</p>;
+  if (!items) return <p className="hint">đang tải…</p>;
+
+  if (items.length === 0) {
+    return (
+      <main className="stack">
+        <section className="card">
+          <h2>Không có gì đến hạn</h2>
+          <p className="hint">
+            Drill chỉ hiện cụm và lỗi đã tới hạn ôn. Chạy một phiên nói để sinh dữ liệu, hoặc quay lại sau — lịch ôn
+            giãn dần 3 → 7 → 14 → 30 ngày.
+          </p>
+          <div className="row">
+            <button className="primary" onClick={() => void load()}>
+              Tải lại
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  if (!current) {
+    return (
+      <main className="stack">
+        <section className="card">
+          <h2>Xong {items.length} thẻ</h2>
+          <p className="hint">
+            đúng {tally.correct} · sai {tally.again}
+          </p>
+          <div className="row">
+            <button className="primary" onClick={() => void load()}>
+              Ôn tiếp
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="stack">
+      <p className="hint">
+        {index + 1}/{items.length} · đúng {tally.correct} · sai {tally.again}
+      </p>
+      {toast && <p className="hint">{toast}</p>}
+
+      <section className="card drill">
+        {current.kind === 'mistake' ? (
+          <>
+            <p className="hint">Bạn đã nói</p>
+            <p className="drill-front">
+              <s>{current.wrong}</s>
+            </p>
+            {revealed && (
+              <div className="drill-back">
+                <p className="hint">Nên nói</p>
+                <p>
+                  <b>{current.right}</b>
+                </p>
+                {current.note && <p className="hint">{current.note}</p>}
+                <p className="hint">
+                  pattern: {current.pattern} · đã sai {current.count} lần
+                </p>
+              </div>
+            )}
+          </>
+        ) : current.example ? (
+          <>
+            <p className="hint">Nói lại bằng tiếng Anh</p>
+            <p className="drill-front">{current.example}</p>
+            {revealed && (
+              <div className="drill-back">
+                <p>
+                  <b>{current.phrase}</b>
+                </p>
+                <p className="hint">đã gặp {current.count} lần</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="hint">Cụm này còn nhớ không?</p>
+            <p className="drill-front">{current.phrase}</p>
+            {revealed && <p className="hint">tự chấm ở hai nút bên dưới</p>}
+          </>
+        )}
+      </section>
+
+      <div className="row drill-actions">
+        {!revealed ? (
+          <button className="primary" onClick={() => setRevealed(true)}>
+            Hiện đáp án
+          </button>
+        ) : (
+          <>
+            <button disabled={busy} onClick={() => void grade('again')}>
+              Sai (←)
+            </button>
+            <button className="primary" disabled={busy} onClick={() => void grade('correct')}>
+              Đúng (→)
+            </button>
+          </>
+        )}
+      </div>
     </main>
   );
 }

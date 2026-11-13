@@ -298,3 +298,34 @@ label {
   font-size: 12px;
   vertical-align: middle;
 }
+
+/* Drill — thẻ tự chấm, không có audio. */
+.drill {
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
+
+.drill-front {
+  margin: 6px 0 0;
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+.drill-front s {
+  color: var(--danger);
+  text-decoration-thickness: 1px;
+}
+
+.drill-back {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.drill-actions button {
+  flex: 1;
+  min-width: 120px;
+}

@@ -6,6 +6,7 @@ import { env } from './env.js';
 import { getDb } from './db/index.js';
 import { spikeRuns } from './db/schema.js';
 import { extractAndStore } from './extract/run.js';
+import { answerDrill, DRILL_LIMIT_DEFAULT, DRILL_LIMIT_MAX, listDrill } from './review/drill.js';
 import { getSessionDetail, listSessions } from './session/history.js';
 import {
   appendEvents,
@@ -44,6 +45,13 @@ const profileSchema = z.object({
 
 const authSchema = z.object({
   code: z.string().min(1).max(200),
+});
+
+/** Drill tự chấm: client chỉ được gửi hai kết quả, không gửi mốc thời gian. */
+const drillAnswerSchema = z.object({
+  kind: z.enum(['vocab', 'mistake']),
+  id: z.number().int().positive(),
+  outcome: z.enum(['again', 'correct']),
 });
 
 /** Spike gửi nguyên object kết quả đo; chỉ ràng buộc hai field cần để tra cứu. */
@@ -139,6 +147,8 @@ export function createApp() {
   app.use('/api/sessions', requireAuth);
   app.use('/api/sessions/*', requireAuth);
   app.use('/api/mistakes/*', requireAuth);
+  app.use('/api/drill', requireAuth);
+  app.use('/api/drill/*', requireAuth);
 
   app.post('/api/session/start', async (c) => {
     const body = await c.req.json().catch(() => ({}));
@@ -274,6 +284,30 @@ export function createApp() {
     try {
       const removed = await deactivateMistake(getDb(), id);
       return removed ? c.json({ ok: true }) : c.json({ error: 'not_found' }, 404);
+    } catch (error) {
+      return fail(c, error);
+    }
+  });
+
+  app.get('/api/drill/due', async (c) => {
+    const raw = Number(c.req.query('limit') ?? DRILL_LIMIT_DEFAULT);
+    const limit = Number.isFinite(raw)
+      ? Math.min(Math.max(Math.trunc(raw), 1), DRILL_LIMIT_MAX)
+      : DRILL_LIMIT_DEFAULT;
+    try {
+      return c.json(await listDrill(getDb(), limit));
+    } catch (error) {
+      return fail(c, error);
+    }
+  });
+
+  app.post('/api/drill/answer', async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const parsed = drillAnswerSchema.safeParse(body);
+    if (!parsed.success) return c.json({ error: 'invalid_body' }, 400);
+    try {
+      const { kind, id, outcome } = parsed.data;
+      return c.json(await answerDrill(getDb(), kind, id, outcome));
     } catch (error) {
       return fail(c, error);
     }

@@ -29,6 +29,32 @@ export interface ContextResult {
   today: { audioSec: number; tokens: number; extractRequests: number };
 }
 
+export type DrillItem =
+  | {
+      kind: 'vocab';
+      id: number;
+      phrase: string;
+      example: string | null;
+      count: number;
+      nextReview: string | null;
+    }
+  | {
+      kind: 'mistake';
+      id: number;
+      pattern: string;
+      wrong: string;
+      right: string;
+      note: string | null;
+      count: number;
+      nextReview: string | null;
+    };
+
+export interface DrillAnswer {
+  streak: number;
+  nextReview: string;
+  graduated: boolean;
+}
+
 export interface TurnEvent {
   role: 'user' | 'assistant';
   text: string;
@@ -147,6 +173,9 @@ export const api = {
       { method: 'POST' },
     ),
   context: () => req<ContextResult>('/api/context'),
+  drillDue: (limit = 12) => req<{ items: DrillItem[] }>(`/api/drill/due?limit=${limit}`),
+  drillAnswer: (kind: DrillItem['kind'], id: number, outcome: 'again' | 'correct') =>
+    req<DrillAnswer>('/api/drill/answer', { method: 'POST', body: JSON.stringify({ kind, id, outcome }) }),
   listSessions: (limit = 20) => req<{ sessions: SessionListItem[] }>(`/api/sessions?limit=${limit}`),
   sessionDetail: (id: number) => req<SessionDetail>(`/api/sessions/${id}`),
   saveProfile: (contentMd: string) =>
