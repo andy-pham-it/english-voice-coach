@@ -1,0 +1,31 @@
+{
+  "_comment": "Dữ liệu cho blueprint 4 tuần (docs/jobsearch-blueprint-4weeks.md). profile bị brief cắt ở 250 token (~1000 ký tự) nên KHÔNG viết dài hơn. dueInDays xếp lịch giới thiệu cụm từ: 4 cụm hôm nay, sau đó 2 cụm/ngày, để mọi phiên không bị khoá vào một cụm.",
+  "profile": "## Who I am\nAndy, 19 years in software, hands-on technical lead in Vietnam. Now the sole backend engineer on a payments and livestreaming platform (pre-launch, UAT).\n\n## What we are training\nEnglish job interviews for remote roles: Senior Full-Stack Engineer and Hands-on Technical Lead on AI-native products. Judge structure, numbers and honesty, not grammar alone.\n\n## My English\nReading and writing are strong. Speaking is B1+: I follow fast speech but translate in my head first, so my first sentence is slow and I fill silences.\n\n## Push me on\n- First word within 3 seconds. If I stall, interrupt: \"Give me the short answer first.\"\n- Every answer: situation, action, result, one number.\n- Twice per session ask \"What exactly did you do?\" and \"How do you know?\"",
+  "phrases": [
+    { "phrase": "that's a good question", "example": "That's a good question — the short answer is we chose Postgres.", "dueInDays": 0 },
+    { "phrase": "let me take that in two parts", "example": "Let me take that in two parts: the design, then what broke.", "dueInDays": 0 },
+    { "phrase": "before I answer", "example": "Before I answer, let me make sure I understand: you mean the wallet, right?", "dueInDays": 0 },
+    { "phrase": "give me a moment", "example": "Give me a moment to put my thoughts in order.", "dueInDays": 0 },
+    { "phrase": "there are three parts to this", "example": "There are three parts to this: scope, estimate, and risk.", "dueInDays": 1 },
+    { "phrase": "short answer first", "example": "Short answer first, then the detail.", "dueInDays": 1 },
+    { "phrase": "let me start with the constraint", "example": "Let me start with the constraint, then the trade-off.", "dueInDays": 2 },
+    { "phrase": "I'll come back to the numbers", "example": "I'll come back to the numbers in a second.", "dueInDays": 2 },
+    { "phrase": "the order of events was", "example": "The order of events was: first the alert, then the rollback.", "dueInDays": 3 },
+    { "phrase": "the trade-off was", "example": "The trade-off was latency against cost.", "dueInDays": 3 },
+    { "phrase": "we chose it because", "example": "We chose it because the team already knew it, and we accepted slower writes.", "dueInDays": 4 },
+    { "phrase": "the alternative would have been", "example": "The alternative would have been a queue, but it cost us a week.", "dueInDays": 4 },
+    { "phrase": "on balance", "example": "On balance, the cheaper option was the right one.", "dueInDays": 5 },
+    { "phrase": "if I did it again", "example": "If I did it again, I would change this one thing.", "dueInDays": 5 },
+    { "phrase": "could you say that again", "example": "Sorry, could you say that again a little slower?", "dueInDays": 6 },
+    { "phrase": "do you mean", "example": "Do you mean the schema or the migration?", "dueInDays": 6 },
+    { "phrase": "I'm not sure I follow", "example": "I'm not sure I follow the last part — could you give an example?", "dueInDays": 7 },
+    { "phrase": "let me rephrase that", "example": "Let me rephrase that.", "dueInDays": 7 },
+    { "phrase": "to put a number on it", "example": "To put a number on it, it was about forty percent faster.", "dueInDays": 8 },
+    { "phrase": "from memory", "example": "From memory, roughly two hundred milliseconds.", "dueInDays": 8 },
+    { "phrase": "that number comes from a measured test", "example": "That number comes from a measured test, not an estimate.", "dueInDays": 9 },
+    { "phrase": "I don't have that figure", "example": "I don't have that figure with me; I would check the dashboard.", "dueInDays": 9 },
+    { "phrase": "that's the summary", "example": "That's the summary — happy to go deeper on any part.", "dueInDays": 10 },
+    { "phrase": "does that answer your question", "example": "Does that answer your question, or should I walk through the data path?", "dueInDays": 10 },
+    { "phrase": "the main lesson for me was", "example": "The main lesson for me was to test the rollback, not the deploy.", "dueInDays": 10 }
+  ]
+}
