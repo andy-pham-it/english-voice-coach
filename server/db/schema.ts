@@ -55,7 +55,7 @@ export const SESSION_STATUSES = ['active', 'ended', 'abandoned'] as const;
  * Vai của AI trong phiên. `coach` sửa lỗi từng lượt; `interview` giữ vai
  * người phỏng vấn, không sửa, chỉ phản hồi sau khi hết bài.
  */
-export const COACH_MODES = ['coach', 'interview'] as const;
+export const COACH_MODES = ['coach', 'interview', 'reflex'] as const;
 export type CoachMode = (typeof COACH_MODES)[number];
 
 export const learnerProfile = pgTable('learner_profile', {
@@ -90,7 +90,7 @@ export const sessions = pgTable('sessions', {
   index('sessions_search_idx').using('gin', t.search),
   index('sessions_started_at_idx').on(t.startedAt),
   check('sessions_mode_check', sql`${t.mode} is null or ${t.mode} in ('duplex', 'ptt')`),
-  check('sessions_coach_mode_check', sql`${t.coachMode} in ('coach', 'interview')`),
+  check('sessions_coach_mode_check', sql`${t.coachMode} in ('coach', 'interview', 'reflex')`),
   check('sessions_status_check', sql`${t.status} in ('active', 'ended', 'abandoned')`),
 ]);
 
@@ -103,6 +103,12 @@ export const turns = pgTable('turns', {
   text: text('text').notNull(),
   /** Chỉ có ở role='user', điền sau phiên — Live API không trả correction. */
   corrections: jsonb('corrections'),
+  /**
+   * Chỉ có ở role='user': số ms từ lúc AI nói xong tới khung tiếng đầu tiên.
+   * Đo ở client (onset theo năng lượng), không đoán từ transcript — transcript
+   * đến trễ 0,3–0,8s nên sẽ thổi phồng chỉ số này.
+   */
+  firstWordMs: integer('first_word_ms'),
   audioMs: integer('audio_ms'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   search: tsvector('search').generatedAlwaysAs(

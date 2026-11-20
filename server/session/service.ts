@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/index.js';
 import { mistakes, sessions, turns, usageDaily, vocab, type Session } from '../db/schema.js';
 import type { CoachMode } from '../db/schema.js';
@@ -164,6 +164,8 @@ export interface TurnEvent {
   text: string;
   audioMs?: number;
   createdAt?: string;
+  /** Chỉ ở role='user': ms từ lúc AI nói xong tới tiếng đầu tiên. */
+  firstWordMs?: number;
 }
 
 export interface UsageEvent {
@@ -190,6 +192,7 @@ export async function appendEvents(
         role: t.role,
         text: t.text,
         audioMs: t.audioMs ?? null,
+        firstWordMs: t.role === 'user' ? (t.firstWordMs ?? null) : null,
         createdAt: t.createdAt ? new Date(t.createdAt) : new Date(),
       })),
     );
@@ -214,6 +217,30 @@ export async function appendEvents(
   return { turns: rows.length, audioSec, tokens };
 }
 
+export interface LatencyStats {
+  count: number;
+  medianMs: number;
+}
+
+/**
+ * Độ trễ điển hình: ms từ lúc AI nói xong tới tiếng đầu tiên của người học.
+ * Dùng median, không mean — một lần ngồi im 30 giây sẽ kéo lệch cả buổi.
+ */
+export async function loadLatency(db: Db, sessionId: number): Promise<LatencyStats | null> {
+  const rows = await db
+    .select({ ms: turns.firstWordMs })
+    .from(turns)
+    .where(and(eq(turns.sessionId, sessionId), eq(turns.role, 'user'), isNotNull(turns.firstWordMs)));
+  const values = rows
+    .map((r) => r.ms)
+    .filter((n): n is number => typeof n === 'number' && n > 0)
+    .sort((a, b) => a - b);
+  if (!values.length) return null;
+  const mid = Math.floor(values.length / 2);
+  const medianMs = values.length % 2 === 1 ? values[mid]! : Math.round((values[mid - 1]! + values[mid]!) / 2);
+  return { count: values.length, medianMs };
+}
+
 export interface EndResult {
   sessionId: number;
   status: string;
@@ -226,6 +253,7 @@ export interface EndResult {
   items?: { wrong: string; right: string; pattern: string; note: string }[];
   phrases?: string[];
   tomorrow?: { en: string; vi: string; tag: string }[];
+  latency?: LatencyStats | null;
   error?: string;
 }
 
@@ -237,6 +265,8 @@ export async function endSession(
   const [session] = await db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
   if (!session) throw Object.assign(new Error('session không tồn tại'), { status: 404 });
 
+  const latency = await loadLatency(db, sessionId);
+
   if (session.status !== 'active') {
     return {
       sessionId,
@@ -247,6 +277,7 @@ export async function endSession(
       topic: session.topic,
       extract: 'skipped',
       corrections: 0,
+      latency,
     };
   }
 
@@ -287,6 +318,7 @@ export async function endSession(
       })),
       phrases: result.extraction.new_phrases,
       tomorrow: result.extraction.tomorrow,
+      latency,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -299,6 +331,7 @@ export async function endSession(
       topic: session.topic,
       extract: timedOut ? 'timeout' : 'failed',
       corrections: 0,
+      latency,
       error: message,
     };
   } finally {

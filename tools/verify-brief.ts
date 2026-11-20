@@ -6,6 +6,7 @@ import { createDb } from '../server/db/client.js';
 import {
   BRIEF_BUDGET,
   INTERVIEW_RULES,
+  REFLEX_RULES,
   RULES,
   SECTION_BUDGET,
   composeBrief,
@@ -36,7 +37,11 @@ check('clipToTokens giữ nguyên khi ngắn', clipToTokens('short text', 50) ==
 
 // Cả hai bộ rules phải nằm trong ngân sách phần rules — nếu vượt, joinBrief
 // cắt âm thầm và mất đúng phần luật cuối cùng.
-for (const [name, rules] of [['coach', RULES], ['interview', INTERVIEW_RULES]] as const) {
+for (const [name, rules] of [
+  ['coach', RULES],
+  ['interview', INTERVIEW_RULES],
+  ['reflex', REFLEX_RULES],
+] as const) {
   const t = estimateTokens(rules);
   check(`rules ${name} ≤ ${SECTION_BUDGET.rules} token`, t <= SECTION_BUDGET.rules, `${t} token`);
   check(`rules ${name} không bị cắt`, clipToTokens(rules, SECTION_BUDGET.rules) === rules.trim());
@@ -73,6 +78,17 @@ check('deriveTopic interview xoay vòng câu chuyện', deriveTopic({ ...sample,
 const profileBody = brief.parts.profile;
 check('profile không bị cắt', !profileBody.trimEnd().endsWith('…'));
 check('profile còn phần số liệu', profileBody.includes('Numbers I must defend'), `${estimateTokens(profileBody)} / ${SECTION_BUDGET.profile} token`);
+
+// Vai phản xạ: luật khác hẳn, và chủ đề phải là câu hỏi nhanh, không phải STAR.
+const reflexBrief = await composeBrief(db, { coach: 'reflex' });
+check('brief chế độ reflex dùng REFLEX_RULES', reflexBrief.text.includes('rapid-fire English drill'));
+check('reflex không yêu cầu STAR', !reflexBrief.text.includes('Correct at most TWO'));
+check(
+  'chủ đề reflex xoay giữa phỏng vấn nhanh và small talk',
+  reflexBrief.text.includes('rapid-fire'),
+  reflexBrief.topic,
+);
+check('brief reflex ≤ 1.000 token', reflexBrief.tokens <= BRIEF_BUDGET, `${reflexBrief.tokens}`);
 
 check('brief ≤ 1.000 token', brief.tokens <= BRIEF_BUDGET, `${brief.tokens}`);
 check('có <rules>', brief.text.includes('<rules>'));

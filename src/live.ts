@@ -27,6 +27,12 @@ export interface LiveHandlers {
   onInterrupted: () => void;
   onUsage: (usage: LiveUsage) => void;
   /**
+   * Số ms từ lúc AI nói xong tới khung tiếng nói đầu tiên của người học.
+   * Đo bằng năng lượng âm thanh, không bằng transcript: transcript trễ
+   * 0,3-0,8s nên dùng nó sẽ thổi phồng chỉ số.
+   */
+  onFirstWord?: (ms: number) => void;
+  /**
    * Socket đóng. `intentional` = false nghĩa là Google/mạng cắt ngang giữa
    * phiên — UI nên nối lại chứ không bỏ im lặng (phiên 10–20 phút rất dễ bị).
    */
@@ -71,6 +77,13 @@ export class LiveSession {
   private queued: AudioBufferSourceNode[] = [];
   private rsPhase = 0;
   private audioBytes = 0;
+  /** Mốc "AI vừa nói xong", để đo độ trễ tới tiếng đầu tiên của người học. */
+  private speechAnchor: number | null = null;
+  private endTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Ngưỡng năng lượng: đã bật noiseSuppression + AGC nên im lặng thật rất nhỏ. */
+  private static readonly ONSET_RMS = 0.02;
+  /** Mốc cũ hơn 60s thì bỏ: không thể coi là "trả lời ngay sau câu hỏi". */
+  private static readonly ANCHOR_MAX_MS = 60_000;
 
   constructor(private readonly handlers: LiveHandlers) {}
 
@@ -239,6 +252,7 @@ export class LiveSession {
       // Toàn số 0: VAD cần thấy im lặng thật để chốt câu.
       pcm = new Float32Array(input.length);
     } else {
+      this.detectOnset(input);
       pcm = this.resample(input, this.acIn?.sampleRate ?? 16000);
       this.audioBytes += pcm.length * 2;
     }
@@ -256,8 +270,39 @@ export class LiveSession {
     );
   }
 
-  private resample(input: Float32Array, inRate: number): Float32Array {
-    if (inRate === 16000) return input;
+  /**
+   * Đặt mốc ngay khi đoạn audio cuối của AI thực sự phát xong. Dùng hẹn giờ theo
+   * `nextPlayTime` chứ không lấy lúc nhận chunk: chunk cuối thường còn 200-600ms
+   * trong hàng đợi phát.
+   */
+  private armSpeechAnchor(): void {
+    if (!this.acOut) return;
+    if (this.endTimer) clearTimeout(this.endTimer);
+    const delayMs = Math.max(0, (this.nextPlayTime - this.acOut.currentTime) * 1000) + 60;
+    this.endTimer = setTimeout(() => {
+      this.speechAnchor = performance.now();
+      this.endTimer = null;
+    }, delayMs);
+  }
+
+  /** Khung tiếng đầu tiên vượt ngưỡng năng lượng → chốt độ trễ và bỏ mốc. */
+  private detectOnset(frame: Float32Array): void {
+    const anchor = this.speechAnchor;
+    if (anchor === null) return;
+    let sum = 0;
+    for (let i = 0; i < frame.length; i++) sum += (frame[i] ?? 0) ** 2;
+    if (Math.sqrt(sum / frame.length) < LiveSession.ONSET_RMS) return;
+
+    const ms = performance.now() - anchor;
+    this.speechAnchor = null;
+    if (this.endTimer) {
+      clearTimeout(this.endTimer);
+      this.endTimer = null;
+    }
+    if (ms <= LiveSession.ANCHOR_MAX_MS) this.handlers.onFirstWord?.(Math.round(ms));
+  }
+
+  private resample(input: Float32Array, inRate: number): Float32Array {    if (inRate === 16000) return input;
     const ratio = inRate / 16000;
     const out = new Float32Array(Math.max(1, Math.floor((input.length - this.rsPhase) / ratio)));
     let pos = this.rsPhase;
@@ -297,6 +342,7 @@ export class LiveSession {
 
     this.queued.push(src);
     if (this.queued.length > 40) this.queued = this.queued.slice(-20);
+    this.armSpeechAnchor();
   }
 
   stopPlayback(): void {
@@ -309,10 +355,21 @@ export class LiveSession {
     }
     this.queued = [];
     if (this.acOut) this.nextPlayTime = this.acOut.currentTime;
+    // Bị ngắt lời thì mốc cũ vô nghĩa: người học đã nói trước khi AI nói xong.
+    if (this.endTimer) {
+      clearTimeout(this.endTimer);
+      this.endTimer = null;
+    }
+    this.speechAnchor = null;
   }
 
   private stopAudio(): void {
     this.stopPlayback();
+    if (this.endTimer) {
+      clearTimeout(this.endTimer);
+      this.endTimer = null;
+    }
+    this.speechAnchor = null;
     this.proc?.disconnect();
     this.proc = null;
     this.mic?.getTracks().forEach((t) => t.stop());

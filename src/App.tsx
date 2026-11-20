@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError, type ContextResult, type DrillItem, type EndResult, type SessionDetail, type SessionListItem, type StartResult, type TurnEvent } from './api';
+import { api, ApiError, type CoachMode, type ContextResult, type DrillItem, type EndResult, type SessionDetail, type SessionListItem, type StartResult, type TurnEvent } from './api';
 import { LiveSession, type LiveStatus } from './live';
 import { probeMicrophone, type MicProbe } from './mic';
 
@@ -116,10 +116,10 @@ function Home({
   onStart,
 }: {
   ctx: ContextResult;
-  onStart: (mode: 'duplex' | 'ptt', topic?: string, coach?: 'coach' | 'interview') => void;
+  onStart: (mode: 'duplex' | 'ptt', topic?: string, coach?: CoachMode) => void;
 }) {
   const [topic, setTopic] = useState('');
-  const [coach, setCoach] = useState<'coach' | 'interview'>('coach');
+  const [coach, setCoach] = useState<CoachMode>('coach');
   const [mic, setMic] = useState<{ busy: boolean; result: MicProbe | null }>({ busy: false, result: null });
 
   const chips = ['daily standup', 'code review', 'technical disagreement', 'job interview'];
@@ -175,11 +175,21 @@ function Home({
           >
             Phỏng vấn (không sửa)
           </button>
+          <button
+            type="button"
+            className={coach === 'reflex' ? 'primary' : 'chip'}
+            aria-pressed={coach === 'reflex'}
+            onClick={() => setCoach('reflex')}
+          >
+            Phản xạ (20 giây)
+          </button>
         </div>
         <p className="hint">
           {coach === 'interview'
             ? 'AI giữ vai người phỏng vấn: không sửa lỗi, hỏi tiếp, phản hồi gom ở phút thứ 8.'
-            : 'AI sửa tối đa 2 lỗi mỗi lượt, đúng định dạng sai → đúng → lý do.'}
+            : coach === 'reflex'
+              ? 'Hỏi nhanh, đáp trong 20 giây; AI cắt lời nếu bạn kể chuyện. Cuối buổi trả 3 câu dở nhất.'
+              : 'AI sửa tối đa 2 lỗi mỗi lượt, đúng định dạng sai → đúng → lý do.'}
         </p>
         <div className="row">
           <button className="primary" onClick={() => onStart('duplex', topic.trim() || undefined, coach)}>
@@ -253,6 +263,8 @@ function Session({ onFinished }: { onFinished: () => void }) {
   const seqRef = useRef(1);
   /** Số lần tự nối lại socket, số đang nối, và cờ "đã kết thúc" để không nối lại. */
   const autoRef = useRef({ count: 0, busy: false, ended: false });
+  /** Độ trễ chờ gửi kèm lượt nói kế tiếp của người học (ms từ lúc AI nói xong). */
+  const latenciesRef = useRef<number[]>([]);
 
   linesRef.current = lines;
 
@@ -275,7 +287,13 @@ function Session({ onFinished }: { onFinished: () => void }) {
     const pending = linesRef.current.slice(sentRef.current);
     if (pending.length === 0) return;
     sentRef.current = linesRef.current.length;
-    const turns: TurnEvent[] = pending.map((l) => ({ role: l.role, text: l.text, createdAt: l.createdAt }));
+    const turns: TurnEvent[] = pending.map((l) => {
+      const turn: TurnEvent = { role: l.role, text: l.text, createdAt: l.createdAt };
+      // Độ trễ đo được gắn vào lượt người học kế tiếp chưa gửi. Transcript đến
+      // theo chunk nên không thể gắn chính xác vào chunk đầu — chỉ cần đúng lượt.
+      if (l.role === 'user' && latenciesRef.current.length) turn.firstWordMs = latenciesRef.current.shift();
+      return turn;
+    });
     try {
       await api.events(started.id, { turns });
     } catch {
@@ -314,6 +332,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
         },
         onUserText: (t) => append('user', t),
         onAiText: (t) => append('assistant', t),
+        onFirstWord: (ms) => latenciesRef.current.push(ms),
         onInterrupted: () => setLines((prev) => prev),
         onUsage: () => undefined,
         onClose: (intentional) => {
@@ -343,10 +362,11 @@ function Session({ onFinished }: { onFinished: () => void }) {
     (async () => {
       // StrictMode ở dev mount effect hai lần; nếu gọi api.start hai lần thì
       // tạo hai row session (đã gặp: id 25 và 26). Giữ một promise dùng chung.
+      const storedCoach = sessionStorage.getItem('coach');
       startRef.current ??= api.start(
         duplex ? 'duplex' : 'ptt',
         sessionStorage.getItem('topic') || undefined,
-        sessionStorage.getItem('coach') === 'interview' ? 'interview' : 'coach',
+        storedCoach === 'interview' || storedCoach === 'reflex' ? storedCoach : 'coach',
       );
       const started = await startRef.current;
       if (cancelled) return;
@@ -594,6 +614,13 @@ function Summary({ onContext, onHome }: { onContext: () => void; onHome: () => v
           {minutes ? ` · ${minutes} phút` : ''}
         </p>
         {data?.summary ? <p>{data.summary}</p> : <p className="hint">Chưa phân tích xong — nội dung phiên vẫn đã được lưu.</p>}
+
+        {data?.latency && (
+          <p className="hint">
+            Độ trễ điển hình: <b>{(data.latency.medianMs / 1000).toFixed(1)}s</b> từ lúc AI nói xong tới tiếng
+            đầu tiên ({data.latency.count} lượt). Mục tiêu: dưới 3 giây.
+          </p>
+        )}
 
         {pending && (
           <div className="row">

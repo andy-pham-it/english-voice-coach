@@ -55,11 +55,15 @@ export interface DrillAnswer {
   graduated: boolean;
 }
 
+export type CoachMode = 'coach' | 'interview' | 'reflex';
+
 export interface TurnEvent {
   role: 'user' | 'assistant';
   text: string;
   audioMs?: number;
   createdAt: string;
+  /** Chỉ ở role='user': ms từ lúc AI nói xong tới tiếng đầu tiên. */
+  firstWordMs?: number;
 }
 
 export interface CorrectionItem {
@@ -87,6 +91,7 @@ export interface EndResult {
   items?: CorrectionItem[];
   phrases?: string[];
   tomorrow?: TomorrowPhrase[];
+  latency?: { count: number; medianMs: number } | null;
   error?: string;
 }
 
@@ -151,7 +156,7 @@ export const api = {
   authStatus: () => req<{ ok: boolean; auth: 'disabled' | 'enabled' }>('/api/auth/status'),
   login: (code: string) => req<{ ok: boolean }>('/api/auth', { method: 'POST', body: JSON.stringify({ code }) }),
   logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
-  start: (mode: 'duplex' | 'ptt', topic?: string, coach?: 'coach' | 'interview') =>
+  start: (mode: 'duplex' | 'ptt', topic?: string, coach?: CoachMode) =>
     req<StartResult>('/api/session/start', {
       method: 'POST',
       body: JSON.stringify({

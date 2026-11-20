@@ -36,6 +36,13 @@
       "when": 1795199436318,
       "tag": "0004_add_coach_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795217727630,
+      "tag": "0005_reflex_mode_and_latency",
+      "breakpoints": true
     }
   ]
 }

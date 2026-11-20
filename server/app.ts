@@ -19,6 +19,7 @@ import {
   type SessionMode,
 } from './session/service.js';
 import type { CoachMode } from './db/schema.js';
+import { COACH_MODES } from './db/schema.js';
 
 const eventsSchema = z.object({
   turns: z
@@ -158,8 +159,9 @@ export function createApp() {
     // vào systemInstruction nên không để xuống dòng lạ hay chuỗi quá dài.
     const rawTopic = typeof body?.topic === 'string' ? body.topic.replace(/\s+/g, ' ').trim() : '';
     const topic = rawTopic ? rawTopic.slice(0, 120) : undefined;
-    // Vai AI: 'coach' (sửa lỗi từng lượt) hoặc 'interview' (giữ vai, không sửa).
-    const coach: CoachMode = body?.coach === 'interview' ? 'interview' : 'coach';
+    // Vai AI: 'coach' (sửa lỗi từng lượt), 'interview' (giữ vai, không sửa),
+    // 'reflex' (câu ngắn, cắt khi quá 20 giây). Giá trị lạ rơi về 'coach'.
+    const coach: CoachMode = COACH_MODES.includes(body?.coach) ? (body.coach as CoachMode) : 'coach';
     try {
       const result = await startSession(getDb(), { mode, topic, coach });
       return c.json({

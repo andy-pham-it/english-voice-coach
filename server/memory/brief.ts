@@ -76,6 +76,21 @@ Rules:
 - Challenge every number: where it came from, measured or estimated. If a claim sounds generic, say: "That is generic. What did you personally do?"
 - After 8 minutes, step out of role: score me 1-5 on clarity, depth, numbers and honesty, one line of evidence each, then one model answer in four sentences.`;
 
+/**
+ * Vai thứ ba: phản xạ. Câu hỏi đời thường và câu hỏi nhanh trong phỏng vấn.
+ * Không dùng STAR: một câu 90 giây cho "what is your notice period" là tự trừ
+ * điểm. Mục tiêu là trả lời trong 15-20 giây và bắt đầu nói trong 3 giây.
+ */
+export const REFLEX_RULES = `You are running a rapid-fire English drill. I answer fast, like in a real interview.
+Rules:
+- Always speak English.
+- One short question per turn, maximum 10 words. Never explain, never teach, never praise.
+- If my answer passes 20 seconds or turns into a story, cut in with "Next." and ask the next question.
+- Do not correct grammar while the drill runs.
+- Keep going: 12 to 15 questions, no commentary between them.
+- After the last question, step out of role: list the 3 questions I answered worst, and for each give a 15-second model answer. Then name one filler word I used too often.
+- Never ask two questions in one turn.`;
+
 export interface ComposeOptions {
   /** Chủ đề phiên, đã suy ra từ state. */
   topic: string;
@@ -221,6 +236,13 @@ export function deriveTopic(input: {
   sessionCount: number;
   coach?: CoachMode;
 }): string {
+  if (input.coach === 'reflex') {
+    // Hai ngân hàng xen kẽ theo buổi: câu nhanh trong phỏng vấn, và chuyện
+    // thường ngày với đồng đội remote — chỗ B1+ lộ ra rõ nhất.
+    return input.sessionCount % 2 === 0
+      ? 'rapid-fire interview questions: notice period, salary, why us, questions for them'
+      : 'rapid-fire small talk with a remote teammate: weekend, food, commute, holiday plans';
+  }
   if (input.coach === 'interview') {
     const interviews = [
       'a delivery crisis I held together',
@@ -294,9 +316,11 @@ export async function composeBrief(db: Db, options?: Partial<ComposeOptions>): P
   const topic = options?.topic ?? deriveTopic({ dueVocab, topMistakes, sessionCount: state.weekSessions, coach: options?.coach });
   const recall = await loadRecall(db, topic);
 
-  const interview = options?.coach === 'interview';
+  const coach = options?.coach ?? 'coach';
+  const interview = coach === 'interview';
+  const reflex = coach === 'reflex';
   const reviewLine =
-    interview && dueVocab.length
+    (interview || reflex) && dueVocab.length
       ? // Ở vai phỏng vấn, cụm ôn tập không được biến thành chủ đề. Cách duy nhất
         // để cụm từ còn được luyện là để người phỏng vấn tạo chỗ dùng chúng.
         `Create a natural chance for me to use: ${dueVocab.slice(0, 3).map((v) => `"${v.phrase}"`).join(', ')}.`
@@ -304,16 +328,18 @@ export async function composeBrief(db: Db, options?: Partial<ComposeOptions>): P
   const today = [
     `Topic for this session: ${topic}.`,
     options?.opener ??
-      (interview
-        ? 'Open with your first question. One at a time, and wait for my answer.'
-        : 'Start by asking me one short question about it.'),
+      (reflex
+        ? 'Ask the first question now. One short question, then wait.'
+        : interview
+          ? 'Open with your first question. One at a time, and wait for my answer.'
+          : 'Start by asking me one short question about it.'),
     reviewLine,
   ]
     .filter(Boolean)
     .join('\n');
 
   return joinBrief({
-    rules: interview ? INTERVIEW_RULES : RULES,
+    rules: reflex ? REFLEX_RULES : interview ? INTERVIEW_RULES : RULES,
     profile: profileRow?.contentMd ?? '',
     state: renderState(state, topMistakes, dueVocab),
     recall: recall ? `Relevant earlier sessions:\n${recall}` : '',
