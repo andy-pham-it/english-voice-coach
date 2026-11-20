@@ -9,11 +9,15 @@ import type { CoachMode } from '../db/schema.js';
 
 export const BRIEF_BUDGET = 1000;
 
-/** Ngân sách từng phần, cộng lại đúng bằng BRIEF_BUDGET. */
+/**
+ * Ngân sách từng phần, cộng lại đúng bằng BRIEF_BUDGET.
+ * `profile` được 300 vì nó phải chứa cả các con số người học sẽ bị hỏi lại;
+ * `state` chỉ cần 250 (5 lỗi + cụm đến hạn + số liệu tuần ≈ 120 token).
+ */
 export const SECTION_BUDGET = {
   rules: 250,
-  profile: 250,
-  state: 300,
+  profile: 300,
+  state: 250,
   recall: 120,
   today: 80,
 } as const;
@@ -207,12 +211,30 @@ async function loadRecall(db: Db, topic: string): Promise<string> {
 /**
  * Suy ra chủ đề phiên từ State — không gọi LLM (spec §12).
  * Ưu tiên: cụm từ đến hạn → pattern lỗi lặp nhiều nhất → xoay vòng 6 chủ đề tĩnh.
+ * Ở vai phỏng vấn thì KHÔNG dùng chủ đề "cuộc nói chuyện dùng cụm từ X": người
+ * phỏng vấn mà mở đầu bằng một cụm từ ôn tập là sai vai. Thay bằng vòng xoay
+ * câu chuyện sẽ bị hỏi thật.
  */
 export function deriveTopic(input: {
   dueVocab: { phrase: string }[];
   topMistakes: { pattern: string }[];
   sessionCount: number;
+  coach?: CoachMode;
 }): string {
+  if (input.coach === 'interview') {
+    const interviews = [
+      'a delivery crisis I held together',
+      'the process change that lifted on-time delivery',
+      'bringing AI into an engineering workflow',
+      'a technical decision I would make differently now',
+      'why I am leaving my current role',
+      'a disagreement I lost and what I changed after it',
+      'a system I designed end to end',
+      'explaining a migration to a non-technical manager',
+    ];
+    const pick = interviews[input.sessionCount % interviews.length] ?? interviews[0];
+    return `mock interview on ${pick}`;
+  }
   const firstDue = input.dueVocab[0];
   if (firstDue) {
     return `work conversation that naturally uses the phrase "${firstDue.phrase}"`;
@@ -269,16 +291,29 @@ export async function composeBrief(db: Db, options?: Partial<ComposeOptions>): P
   const dueVocab = await dueVocabQuery(db);
 
   const state = await loadStateRows(db);
-  const topic = options?.topic ?? deriveTopic({ dueVocab, topMistakes, sessionCount: state.weekSessions });
+  const topic = options?.topic ?? deriveTopic({ dueVocab, topMistakes, sessionCount: state.weekSessions, coach: options?.coach });
   const recall = await loadRecall(db, topic);
 
+  const interview = options?.coach === 'interview';
+  const reviewLine =
+    interview && dueVocab.length
+      ? // Ở vai phỏng vấn, cụm ôn tập không được biến thành chủ đề. Cách duy nhất
+        // để cụm từ còn được luyện là để người phỏng vấn tạo chỗ dùng chúng.
+        `Create a natural chance for me to use: ${dueVocab.slice(0, 3).map((v) => `"${v.phrase}"`).join(', ')}.`
+      : null;
   const today = [
     `Topic for this session: ${topic}.`,
-    options?.opener ?? 'Start by asking me one short question about it.',
-  ].join('\n');
+    options?.opener ??
+      (interview
+        ? 'Open with your first question. One at a time, and wait for my answer.'
+        : 'Start by asking me one short question about it.'),
+    reviewLine,
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   return joinBrief({
-    rules: options?.coach === 'interview' ? INTERVIEW_RULES : RULES,
+    rules: interview ? INTERVIEW_RULES : RULES,
     profile: profileRow?.contentMd ?? '',
     state: renderState(state, topMistakes, dueVocab),
     recall: recall ? `Relevant earlier sessions:\n${recall}` : '',

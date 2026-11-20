@@ -9,16 +9,17 @@
 // đều thành "work conversation that naturally uses …" và phần xoay vòng chủ đề
 // (có "a job interview conversation") không bao giờ chạy.
 //
-// Vì sao có --profile: ngân sách profile trong brief là 250 token (~1.000 ký
+// Vì sao có --profile: ngân sách profile trong brief là 300 token (~1.200 ký
 // tự). Dài hơn sẽ bị cắt âm thầm, nên script chặn trước khi ghi.
 
 import { readFileSync } from 'node:fs';
 import { inArray } from 'drizzle-orm';
 import { createDb } from '../server/db/client.js';
-import { estimateTokens } from '../server/memory/brief.js';
+import { estimateTokens, SECTION_BUDGET } from '../server/memory/brief.js';
 import { learnerProfile, mistakes, vocab } from '../server/db/schema.js';
 
-const PROFILE_TOKEN_BUDGET = 250;
+// Lấy từ brief, không chép số: đổi ngân sách ở brief là script theo ngay.
+const PROFILE_TOKEN_BUDGET = SECTION_BUDGET.profile;
 const DAY_MS = 86_400_000;
 
 function loadEnv(): void {

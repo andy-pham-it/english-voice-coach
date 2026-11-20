@@ -9,6 +9,7 @@ import {
   RULES,
   SECTION_BUDGET,
   composeBrief,
+  deriveTopic,
   estimateTokens,
   clipToTokens,
 } from '../server/memory/brief.js';
@@ -44,11 +45,34 @@ for (const [name, rules] of [['coach', RULES], ['interview', INTERVIEW_RULES]] a
 // Integration: brief thật từ DB.
 const db = createDb(process.env.DATABASE_URL!);
 const brief = await composeBrief(db, { coach: 'interview' });
-console.log('\n--- brief ---\n' + brief.text + '\n-------------');
+// Brief đầy đủ chỉ in khi cần: mặc định chỉ in kết luận, để log ngắn và không
+// bị cắt khi chạy trong CI hay terminal giới hạn dòng.
+if (process.argv.includes('--brief')) {
+  console.log('\n--- brief ---\n' + brief.text + '\n-------------');
+}
 console.log(`tokens: ${brief.tokens} / ${BRIEF_BUDGET} (ước lượng 4 ký tự/token)\n`);
 
 check('brief chế độ interview dùng INTERVIEW_RULES', brief.text.includes('You are the interviewer'));
 check('brief chế độ interview không sửa lỗi từng lượt', !brief.text.includes('Correct at most TWO'));
+check(
+  'chủ đề interview không phải hội thoại ôn cụm từ',
+  !brief.text.includes('work conversation that naturally uses'),
+  brief.text.slice(brief.text.indexOf('<today>'), brief.text.indexOf('</today>')).replace(/\n/g, ' | '),
+);
+check(
+  'interview có nhắc cụm đến hạn ở dạng lời mời dùng',
+  brief.text.includes('Create a natural chance for me to use'),
+);
+
+// deriveTopic phải rẽ nhánh theo vai, không chỉ đổi rules.
+const sample = { dueVocab: [{ phrase: 'that\'s a good question' }], topMistakes: [], sessionCount: 0 };
+check('deriveTopic coach vẫn dùng cụm đến hạn', deriveTopic(sample).startsWith('work conversation'));
+check('deriveTopic interview xoay vòng câu chuyện', deriveTopic({ ...sample, coach: 'interview' }).startsWith('mock interview'));
+
+// Profile không được bị cắt: cắt là mất đúng phần "Numbers I must defend" ở cuối.
+const profileBody = brief.parts.profile;
+check('profile không bị cắt', !profileBody.trimEnd().endsWith('…'));
+check('profile còn phần số liệu', profileBody.includes('Numbers I must defend'), `${estimateTokens(profileBody)} / ${SECTION_BUDGET.profile} token`);
 
 check('brief ≤ 1.000 token', brief.tokens <= BRIEF_BUDGET, `${brief.tokens}`);
 check('có <rules>', brief.text.includes('<rules>'));

@@ -99,7 +99,11 @@ export async function startSession(
 
   if (active) {
     const age = now - active.startedAt.getTime();
-    if (age < RESUME_WINDOW_MS && active.brief) {
+    // Chỉ nối lại khi cùng vai. Người dùng bấm "Phỏng vấn" mà bị đưa vào phiên
+    // Coach còn dở thì brief vẫn là brief cũ — hỏng đúng thứ họ vừa chọn, và
+    // không có gì trên màn hình nói ra. Khác vai thì đóng phiên cũ, mở phiên mới.
+    const sameCoach = active.coachMode === (options.coach ?? 'coach');
+    if (age < RESUME_WINDOW_MS && active.brief && sameCoach) {
       return {
         resumed: true,
         session: active,
