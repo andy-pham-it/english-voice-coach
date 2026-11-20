@@ -5,6 +5,7 @@
 import { and, desc, eq, gte, isNull, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
 import { learnerProfile, mistakes, sessions, vocab } from '../db/schema.js';
+import type { CoachMode } from '../db/schema.js';
 
 export const BRIEF_BUDGET = 1000;
 
@@ -56,11 +57,28 @@ Rules:
 - Never invent mistakes. If a sentence is correct, do not correct it.
 - Always end with a short question so I keep talking.`;
 
+/**
+ * Vai thứ hai: người phỏng vấn. Không sửa lỗi trong lúc trả lời — sửa ngay
+ * giữa buổi là dạy cách chờ được sửa, không phải cách nói dưới áp lực.
+ * Phản hồi gom về cuối buổi. Ngân sách 250 token như RULES.
+ */
+export const INTERVIEW_RULES = `You are the interviewer on a hiring panel. I am the candidate. This is a real interview, not a lesson.
+Rules:
+- Always speak English.
+- Stay in role. Never teach, never correct grammar, never praise. "OK" or "Go on" is the most I get.
+- One question at a time, 1-2 short sentences, then stop and wait.
+- Before a new topic, press on my last answer: "What exactly did you do?", "How do you know?", "What did that cost?"
+- Interrupt any answer past 90 seconds: "Give me the short version first."
+- Challenge every number: where it came from, measured or estimated. If a claim sounds generic, say: "That is generic. What did you personally do?"
+- After 8 minutes, step out of role: score me 1-5 on clarity, depth, numbers and honesty, one line of evidence each, then one model answer in four sentences.`;
+
 export interface ComposeOptions {
   /** Chủ đề phiên, đã suy ra từ state. */
   topic: string;
   /** Cụm từ mở đầu gợi ý cho AI, thường là câu hỏi đầu tiên. */
   opener?: string;
+  /** Vai AI của phiên. Mặc định `coach`. */
+  coach?: CoachMode;
 }
 
 interface StateRow {
@@ -260,7 +278,7 @@ export async function composeBrief(db: Db, options?: Partial<ComposeOptions>): P
   ].join('\n');
 
   return joinBrief({
-    rules: RULES,
+    rules: options?.coach === 'interview' ? INTERVIEW_RULES : RULES,
     profile: profileRow?.contentMd ?? '',
     state: renderState(state, topMistakes, dueVocab),
     recall: recall ? `Relevant earlier sessions:\n${recall}` : '',

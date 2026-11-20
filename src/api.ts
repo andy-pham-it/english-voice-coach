@@ -151,10 +151,14 @@ export const api = {
   authStatus: () => req<{ ok: boolean; auth: 'disabled' | 'enabled' }>('/api/auth/status'),
   login: (code: string) => req<{ ok: boolean }>('/api/auth', { method: 'POST', body: JSON.stringify({ code }) }),
   logout: () => req<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
-  start: (mode: 'duplex' | 'ptt', topic?: string) =>
+  start: (mode: 'duplex' | 'ptt', topic?: string, coach?: 'coach' | 'interview') =>
     req<StartResult>('/api/session/start', {
       method: 'POST',
-      body: JSON.stringify(topic ? { mode, topic } : { mode }),
+      body: JSON.stringify({
+        mode,
+        ...(topic ? { topic } : {}),
+        ...(coach ? { coach } : {}),
+      }),
     }),
   events: (id: number, payload: { turns?: TurnEvent[]; usage?: { audioSec?: number; tokens?: number } }) =>
     req<{ ok: boolean }>(`/api/session/${id}/events`, { method: 'POST', body: JSON.stringify(payload) }),

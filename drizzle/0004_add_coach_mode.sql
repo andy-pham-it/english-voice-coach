@@ -1,0 +1,2 @@
+ALTER TABLE "sessions" ADD COLUMN "coach_mode" text DEFAULT 'coach' NOT NULL;--> statement-breakpoint
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_coach_mode_check" CHECK ("sessions"."coach_mode" in ('coach', 'interview'));

@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, isNull, sql } from 'drizzle-orm';
 import type { Db } from '../db/index.js';
 import { mistakes, sessions, turns, usageDaily, vocab, type Session } from '../db/schema.js';
+import type { CoachMode } from '../db/schema.js';
 import { env } from '../env.js';
 import { composeBrief, DEFAULT_PROFILE } from '../memory/brief.js';
 import { buildLiveConfig, LIVE_MODEL } from '../live/config.js';
@@ -86,7 +87,7 @@ export async function getRecap(db: Db): Promise<Recap> {
 
 export async function startSession(
   db: Db,
-  options: { mode: SessionMode; topic?: string },
+  options: { mode: SessionMode; topic?: string; coach?: CoachMode },
 ): Promise<StartResult> {
   const now = Date.now();
   const [active] = await db
@@ -122,7 +123,11 @@ export async function startSession(
       .where(eq(sessions.id, active.id));
   }
 
-  const brief = await composeBrief(db, options.topic ? { topic: options.topic } : undefined);
+  const coach: CoachMode = options.coach ?? 'coach';
+  const brief = await composeBrief(db, {
+    coach,
+    ...(options.topic ? { topic: options.topic } : {}),
+  });
   const [created] = await db
     .insert(sessions)
     .values({
@@ -132,6 +137,7 @@ export async function startSession(
       briefTokens: brief.tokens,
       liveModel: LIVE_MODEL,
       mode: options.mode,
+      coachMode: coach,
       status: 'active',
     })
     .returning();
@@ -311,7 +317,10 @@ export async function rebrief(db: Db, sessionId: number): Promise<RebriefResult>
     throw Object.assign(new Error(`session đang ở trạng thái ${session.status}`), { status: 409 });
   }
 
-  const brief = await composeBrief(db, { topic: session.topic ?? undefined });
+  const brief = await composeBrief(db, {
+    topic: session.topic ?? undefined,
+    coach: session.coachMode,
+  });
   await db
     .update(sessions)
     .set({ brief: brief.text, briefTokens: brief.tokens })

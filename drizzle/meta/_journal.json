@@ -29,6 +29,13 @@
       "when": 1794540300236,
       "tag": "0003_sticky_psynapse",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795199436318,
+      "tag": "0004_add_coach_mode",
+      "breakpoints": true
     }
   ]
 }

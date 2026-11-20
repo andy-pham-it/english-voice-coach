@@ -3,7 +3,15 @@
 
 import { readFileSync } from 'node:fs';
 import { createDb } from '../server/db/client.js';
-import { BRIEF_BUDGET, SECTION_BUDGET, composeBrief, estimateTokens, clipToTokens } from '../server/memory/brief.js';
+import {
+  BRIEF_BUDGET,
+  INTERVIEW_RULES,
+  RULES,
+  SECTION_BUDGET,
+  composeBrief,
+  estimateTokens,
+  clipToTokens,
+} from '../server/memory/brief.js';
 
 const text = readFileSync(new URL('../.env.local', import.meta.url), 'utf8');
 for (const line of text.split('\n')) {
@@ -25,10 +33,22 @@ const clipped = clipToTokens(long, 50);
 check('clipToTokens ≤ 50 token', estimateTokens(clipped) <= 50, `${estimateTokens(clipped)} token`);
 check('clipToTokens giữ nguyên khi ngắn', clipToTokens('short text', 50) === 'short text');
 
+// Cả hai bộ rules phải nằm trong ngân sách phần rules — nếu vượt, joinBrief
+// cắt âm thầm và mất đúng phần luật cuối cùng.
+for (const [name, rules] of [['coach', RULES], ['interview', INTERVIEW_RULES]] as const) {
+  const t = estimateTokens(rules);
+  check(`rules ${name} ≤ ${SECTION_BUDGET.rules} token`, t <= SECTION_BUDGET.rules, `${t} token`);
+  check(`rules ${name} không bị cắt`, clipToTokens(rules, SECTION_BUDGET.rules) === rules.trim());
+}
+
 // Integration: brief thật từ DB.
-const brief = await composeBrief(createDb(process.env.DATABASE_URL!));
+const db = createDb(process.env.DATABASE_URL!);
+const brief = await composeBrief(db, { coach: 'interview' });
 console.log('\n--- brief ---\n' + brief.text + '\n-------------');
 console.log(`tokens: ${brief.tokens} / ${BRIEF_BUDGET} (ước lượng 4 ký tự/token)\n`);
+
+check('brief chế độ interview dùng INTERVIEW_RULES', brief.text.includes('You are the interviewer'));
+check('brief chế độ interview không sửa lỗi từng lượt', !brief.text.includes('Correct at most TWO'));
 
 check('brief ≤ 1.000 token', brief.tokens <= BRIEF_BUDGET, `${brief.tokens}`);
 check('có <rules>', brief.text.includes('<rules>'));

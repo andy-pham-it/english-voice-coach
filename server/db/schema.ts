@@ -51,6 +51,12 @@ export type MistakePattern = (typeof MISTAKE_PATTERNS)[number];
 
 export const SESSION_MODES = ['duplex', 'ptt'] as const;
 export const SESSION_STATUSES = ['active', 'ended', 'abandoned'] as const;
+/**
+ * Vai của AI trong phiên. `coach` sửa lỗi từng lượt; `interview` giữ vai
+ * người phỏng vấn, không sửa, chỉ phản hồi sau khi hết bài.
+ */
+export const COACH_MODES = ['coach', 'interview'] as const;
+export type CoachMode = (typeof COACH_MODES)[number];
 
 export const learnerProfile = pgTable('learner_profile', {
   id: smallint('id').primaryKey().default(1),
@@ -74,6 +80,8 @@ export const sessions = pgTable('sessions', {
   tomorrow: jsonb('tomorrow').$type<{ en: string; vi: string; tag: string }[]>(),
   liveModel: text('live_model'),
   mode: text('mode', { enum: SESSION_MODES }),
+  /** Vai AI của phiên — giữ lại để rebrief không âm thầm đổi về coach. */
+  coachMode: text('coach_mode', { enum: COACH_MODES }).notNull().default('coach'),
   status: text('status', { enum: SESSION_STATUSES }).notNull().default('active'),
   search: tsvector('search').generatedAlwaysAs(
     sql`to_tsvector('english', coalesce(topic, '') || ' ' || coalesce(summary, ''))`,
@@ -82,6 +90,7 @@ export const sessions = pgTable('sessions', {
   index('sessions_search_idx').using('gin', t.search),
   index('sessions_started_at_idx').on(t.startedAt),
   check('sessions_mode_check', sql`${t.mode} is null or ${t.mode} in ('duplex', 'ptt')`),
+  check('sessions_coach_mode_check', sql`${t.coachMode} in ('coach', 'interview')`),
   check('sessions_status_check', sql`${t.status} in ('active', 'ended', 'abandoned')`),
 ]);
 

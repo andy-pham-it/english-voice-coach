@@ -59,9 +59,10 @@ export default function App() {
       {view === 'home' && ctx && (
         <Home
           ctx={ctx}
-          onStart={(mode, topic) => {
+          onStart={(mode, topic, coach) => {
             sessionStorage.setItem('mode', mode);
             sessionStorage.setItem('topic', topic ?? '');
+            sessionStorage.setItem('coach', coach ?? 'coach');
             setView('session');
           }}
         />
@@ -115,9 +116,10 @@ function Home({
   onStart,
 }: {
   ctx: ContextResult;
-  onStart: (mode: 'duplex' | 'ptt', topic?: string) => void;
+  onStart: (mode: 'duplex' | 'ptt', topic?: string, coach?: 'coach' | 'interview') => void;
 }) {
   const [topic, setTopic] = useState('');
+  const [coach, setCoach] = useState<'coach' | 'interview'>('coach');
   const [mic, setMic] = useState<{ busy: boolean; result: MicProbe | null }>({ busy: false, result: null });
 
   const chips = ['daily standup', 'code review', 'technical disagreement', 'job interview'];
@@ -156,11 +158,34 @@ function Home({
             </button>
           ))}
         </div>
+        <div className="row" role="group" aria-label="Vai của AI">
+          <button
+            type="button"
+            className={coach === 'coach' ? 'primary' : 'chip'}
+            aria-pressed={coach === 'coach'}
+            onClick={() => setCoach('coach')}
+          >
+            Coach (sửa lỗi)
+          </button>
+          <button
+            type="button"
+            className={coach === 'interview' ? 'primary' : 'chip'}
+            aria-pressed={coach === 'interview'}
+            onClick={() => setCoach('interview')}
+          >
+            Phỏng vấn (không sửa)
+          </button>
+        </div>
+        <p className="hint">
+          {coach === 'interview'
+            ? 'AI giữ vai người phỏng vấn: không sửa lỗi, hỏi tiếp, phản hồi gom ở phút thứ 8.'
+            : 'AI sửa tối đa 2 lỗi mỗi lượt, đúng định dạng sai → đúng → lý do.'}
+        </p>
         <div className="row">
-          <button className="primary" onClick={() => onStart('duplex', topic.trim() || undefined)}>
+          <button className="primary" onClick={() => onStart('duplex', topic.trim() || undefined, coach)}>
             Bắt đầu 10 phút
           </button>
-          <button onClick={() => onStart('ptt', topic.trim() || undefined)}>Push-to-talk</button>
+          <button onClick={() => onStart('ptt', topic.trim() || undefined, coach)}>Push-to-talk</button>
         </div>
         <div className="row">
           <button className="link" onClick={checkMic} disabled={mic.busy}>
@@ -318,7 +343,11 @@ function Session({ onFinished }: { onFinished: () => void }) {
     (async () => {
       // StrictMode ở dev mount effect hai lần; nếu gọi api.start hai lần thì
       // tạo hai row session (đã gặp: id 25 và 26). Giữ một promise dùng chung.
-      startRef.current ??= api.start(duplex ? 'duplex' : 'ptt', sessionStorage.getItem('topic') || undefined);
+      startRef.current ??= api.start(
+        duplex ? 'duplex' : 'ptt',
+        sessionStorage.getItem('topic') || undefined,
+        sessionStorage.getItem('coach') === 'interview' ? 'interview' : 'coach',
+      );
       const started = await startRef.current;
       if (cancelled) return;
       const sessionId = started.session_id;
