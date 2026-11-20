@@ -287,16 +287,27 @@ function Session({ onFinished }: { onFinished: () => void }) {
     const pending = linesRef.current.slice(sentRef.current);
     if (pending.length === 0) return;
     sentRef.current = linesRef.current.length;
-    const turns: TurnEvent[] = pending.map((l) => {
+    const turns: TurnEvent[] = [];
+    const shifted: number[] = [];
+    for (const l of pending) {
       const turn: TurnEvent = { role: l.role, text: l.text, createdAt: l.createdAt };
       // Độ trễ đo được gắn vào lượt người học kế tiếp chưa gửi. Transcript đến
       // theo chunk nên không thể gắn chính xác vào chunk đầu — chỉ cần đúng lượt.
-      if (l.role === 'user' && latenciesRef.current.length) turn.firstWordMs = latenciesRef.current.shift();
-      return turn;
-    });
+      if (l.role === 'user') {
+        const ms = latenciesRef.current.shift();
+        if (ms !== undefined) {
+          turn.firstWordMs = ms;
+          shifted.push(ms);
+        }
+      }
+      turns.push(turn);
+    }
     try {
       await api.events(started.id, { turns });
     } catch {
+      // Gửi hỏng thì trả các giá trị đã lấy lại hàng đợi, nếu không lần gửi sau
+      // sẽ gắn độ trễ của câu mới vào lượt cũ.
+      if (shifted.length) latenciesRef.current.unshift(...shifted);
       sentRef.current -= pending.length; // gửi lại ở lần sau
     }
   }, []);

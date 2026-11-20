@@ -21,7 +21,7 @@ import {
 import type { CoachMode } from './db/schema.js';
 import { COACH_MODES } from './db/schema.js';
 
-const eventsSchema = z.object({
+export const eventsSchema = z.object({
   turns: z
     .array(
       z.object({
@@ -29,6 +29,9 @@ const eventsSchema = z.object({
         text: z.string().min(1).max(8_000),
         audioMs: z.number().int().min(0).max(3_600_000).optional(),
         createdAt: z.string().datetime().optional(),
+        // Thiếu field này thì zod lặng lẽ bỏ nó đi và cả chỉ số độ trễ không
+        // bao giờ được lưu — không lỗi, không cảnh báo.
+        firstWordMs: z.number().int().min(0).max(600_000).optional(),
       }),
     )
     .max(200)

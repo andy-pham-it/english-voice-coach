@@ -82,8 +82,10 @@ export class LiveSession {
   private endTimer: ReturnType<typeof setTimeout> | null = null;
   /** Ngưỡng năng lượng: đã bật noiseSuppression + AGC nên im lặng thật rất nhỏ. */
   private static readonly ONSET_RMS = 0.02;
+  private static readonly ONSET_FRAMES = 2;
   /** Mốc cũ hơn 60s thì bỏ: không thể coi là "trả lời ngay sau câu hỏi". */
   private static readonly ANCHOR_MAX_MS = 60_000;
+  private onsetFrames = 0;
 
   constructor(private readonly handlers: LiveHandlers) {}
 
@@ -281,20 +283,31 @@ export class LiveSession {
     const delayMs = Math.max(0, (this.nextPlayTime - this.acOut.currentTime) * 1000) + 60;
     this.endTimer = setTimeout(() => {
       this.speechAnchor = performance.now();
+      this.onsetFrames = 0;
       this.endTimer = null;
     }, delayMs);
   }
 
-  /** Khung tiếng đầu tiên vượt ngưỡng năng lượng → chốt độ trễ và bỏ mốc. */
+  /**
+   * Khung tiếng đầu tiên vượt ngưỡng năng lượng → chốt độ trễ và bỏ mốc.
+   * Đòi HAI khung liên tiếp: một khung đơn có thể là đuôi tiếng AI còn vọng
+   * qua loa (echo cancellation không sạch tuyệt đối) và sẽ báo độ trễ ~0.
+   */
   private detectOnset(frame: Float32Array): void {
     const anchor = this.speechAnchor;
     if (anchor === null) return;
     let sum = 0;
     for (let i = 0; i < frame.length; i++) sum += (frame[i] ?? 0) ** 2;
-    if (Math.sqrt(sum / frame.length) < LiveSession.ONSET_RMS) return;
+    if (Math.sqrt(sum / frame.length) < LiveSession.ONSET_RMS) {
+      this.onsetFrames = 0;
+      return;
+    }
+    this.onsetFrames += 1;
+    if (this.onsetFrames < LiveSession.ONSET_FRAMES) return;
 
     const ms = performance.now() - anchor;
     this.speechAnchor = null;
+    this.onsetFrames = 0;
     if (this.endTimer) {
       clearTimeout(this.endTimer);
       this.endTimer = null;

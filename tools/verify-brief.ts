@@ -2,6 +2,7 @@
 // Chạy: npm run verify:brief   (sau khi npm run db:seed)
 
 import { readFileSync } from 'node:fs';
+import { eventsSchema } from '../server/app.js';
 import { createDb } from '../server/db/client.js';
 import {
   BRIEF_BUDGET,
@@ -89,6 +90,13 @@ check(
   reflexBrief.topic,
 );
 check('brief reflex ≤ 1.000 token', reflexBrief.tokens <= BRIEF_BUDGET, `${reflexBrief.tokens}`);
+
+// Hợp đồng HTTP: zod lặng lẽ bỏ field không khai báo, nên độ trễ sẽ biến mất
+// giữa client và DB mà không có lỗi nào. Đây là chỗ dễ tái phát nhất.
+const parsedEvents = eventsSchema.safeParse({
+  turns: [{ role: 'user', text: 'One month.', firstWordMs: 1800 }],
+});
+check('API nhận firstWordMs', parsedEvents.success && parsedEvents.data.turns?.[0]?.firstWordMs === 1800);
 
 check('brief ≤ 1.000 token', brief.tokens <= BRIEF_BUDGET, `${brief.tokens}`);
 check('có <rules>', brief.text.includes('<rules>'));
