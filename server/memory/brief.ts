@@ -91,6 +91,23 @@ Rules:
 - After the last question, step out of role: list the 3 questions I answered worst, and for each give a 15-second model answer. Then name one filler word I used too often.
 - Never ask two questions in one turn.`;
 
+export const REASON_RULES = `You are my reasoning coach. We talk about my real work as a backend engineer, in English.
+Rules:
+- Always speak English. Keep replies to 2-3 short sentences.
+- Before I answer, I state a four-part frame: "Point, Reason, Example, Point" or "Problem, Cause, Fix, Impact" or "Situation, Task, Action, Result".
+- Listen for those four parts. If one is missing, ask exactly one question about that part, then stop. Never supply the answer.
+- If I speak past 45 seconds without a frame, cut in: "Give me your point first."
+- Every third turn, make me ask you one short clarifying question before you continue. I need practice keeping the conversation alive.
+- Never correct grammar during the drill. Note repeated wording only at the end.
+- After 8 minutes, step out of role: score me 1-5 on structure, reasoning, evidence and conversation flow, one line of evidence each, then give one model answer in four sentences using the frame I used worst.`;
+
+export function rulesFor(coach: CoachMode): string {
+  if (coach === 'reason') return REASON_RULES;
+  if (coach === 'interview') return INTERVIEW_RULES;
+  if (coach === 'reflex') return REFLEX_RULES;
+  return RULES;
+}
+
 export interface ComposeOptions {
   /** Chủ đề phiên, đã suy ra từ state. */
   topic: string;
@@ -236,6 +253,17 @@ export function deriveTopic(input: {
   sessionCount: number;
   coach?: CoachMode;
 }): string {
+  if (input.coach === 'reason') {
+    const topics = [
+      'a technical decision I would defend with numbers',
+      'a production incident from cause to fix',
+      'why a migration was worth its cost',
+      'a disagreement settled with evidence',
+      'choosing between two competing fixes',
+      'explaining a tradeoff to a non-technical manager',
+    ];
+    return `mock reasoning on ${topics[input.sessionCount % topics.length] ?? topics[0]}`;
+  }
   if (input.coach === 'reflex') {
     // Hai ngân hàng xen kẽ theo buổi: câu nhanh trong phỏng vấn, và chuyện
     // thường ngày với đồng đội remote — chỗ B1+ lộ ra rõ nhất.
@@ -319,8 +347,9 @@ export async function composeBrief(db: Db, options?: Partial<ComposeOptions>): P
   const coach = options?.coach ?? 'coach';
   const interview = coach === 'interview';
   const reflex = coach === 'reflex';
+  const reason = coach === 'reason';
   const reviewLine =
-    (interview || reflex) && dueVocab.length
+    (interview || reflex || reason) && dueVocab.length
       ? // Ở vai phỏng vấn, cụm ôn tập không được biến thành chủ đề. Cách duy nhất
         // để cụm từ còn được luyện là để người phỏng vấn tạo chỗ dùng chúng.
         `Create a natural chance for me to use: ${dueVocab.slice(0, 3).map((v) => `"${v.phrase}"`).join(', ')}.`
@@ -330,16 +359,18 @@ export async function composeBrief(db: Db, options?: Partial<ComposeOptions>): P
     options?.opener ??
       (reflex
         ? 'Ask the first question now. One short question, then wait.'
-        : interview
-          ? 'Open with your first question. One at a time, and wait for my answer.'
-          : 'Start by asking me one short question about it.'),
+        : reason
+          ? 'Open with one short question that needs a reason, not a fact.'
+          : interview
+            ? 'Open with your first question. One at a time, and wait for my answer.'
+            : 'Start by asking me one short question about it.'),
     reviewLine,
   ]
     .filter(Boolean)
     .join('\n');
 
   return joinBrief({
-    rules: reflex ? REFLEX_RULES : interview ? INTERVIEW_RULES : RULES,
+    rules: rulesFor(coach),
     profile: profileRow?.contentMd ?? '',
     state: renderState(state, topMistakes, dueVocab),
     recall: recall ? `Relevant earlier sessions:\n${recall}` : '',

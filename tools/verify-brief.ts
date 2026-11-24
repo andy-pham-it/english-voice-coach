@@ -8,6 +8,7 @@ import {
   BRIEF_BUDGET,
   INTERVIEW_RULES,
   REFLEX_RULES,
+  REASON_RULES,
   RULES,
   SECTION_BUDGET,
   composeBrief,
@@ -90,6 +91,16 @@ check(
   reflexBrief.topic,
 );
 check('brief reflex ≤ 1.000 token', reflexBrief.tokens <= BRIEF_BUDGET, `${reflexBrief.tokens}`);
+
+// Vai reason: rules riêng, chủ đề lập luận, và cụm đến hạn vẫn được luồn vào.
+const reasonBrief = await composeBrief(db, { coach: 'reason' });
+check('brief reason dùng REASON_RULES', reasonBrief.parts.rules === REASON_RULES);
+check(
+  'reason có nhắc cụm đến hạn ở dạng lời mời dùng',
+  reasonBrief.text.includes('Create a natural chance for me to use'),
+);
+check('chủ đề reason là lập luận', reasonBrief.topic.startsWith('mock reasoning on'), reasonBrief.topic);
+check('brief reason ≤ 1.000 token', reasonBrief.tokens <= BRIEF_BUDGET, `${reasonBrief.tokens}`);
 
 // Hợp đồng HTTP: zod lặng lẽ bỏ field không khai báo, nên độ trễ sẽ biến mất
 // giữa client và DB mà không có lỗi nào. Đây là chỗ dễ tái phát nhất.
