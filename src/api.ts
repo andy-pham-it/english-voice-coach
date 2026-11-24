@@ -24,7 +24,7 @@ export interface ContextResult {
   briefTokens: number | null;
   briefSessionId: number | null;
   mistakes: Array<{ id: number; pattern: string; wrong: string; right: string; count: number; lastSeen: string }>;
-  dueVocab: Array<{ id: number; phrase: string; example: string | null; count: number }>;
+  dueVocab: Array<{ id: number; phrase: string; count: number; nextReview: string | null }>;
   week: { minutes: number; sessions: number };
   today: { audioSec: number; tokens: number; extractRequests: number };
 }
@@ -55,7 +55,11 @@ export interface DrillAnswer {
   graduated: boolean;
 }
 
-export type CoachMode = 'coach' | 'interview' | 'reflex';
+export const FE_COACH_MODES = ['coach', 'interview', 'reflex', 'reason'] as const;
+export type CoachMode = (typeof FE_COACH_MODES)[number];
+export function isCoachMode(value: string | null | undefined): value is CoachMode {
+  return !!value && (FE_COACH_MODES as readonly string[]).includes(value);
+}
 
 export interface TurnEvent {
   role: 'user' | 'assistant';

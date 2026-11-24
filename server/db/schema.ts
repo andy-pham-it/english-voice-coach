@@ -55,7 +55,7 @@ export const SESSION_STATUSES = ['active', 'ended', 'abandoned'] as const;
  * Vai của AI trong phiên. `coach` sửa lỗi từng lượt; `interview` giữ vai
  * người phỏng vấn, không sửa, chỉ phản hồi sau khi hết bài.
  */
-export const COACH_MODES = ['coach', 'interview', 'reflex'] as const;
+export const COACH_MODES = ['coach', 'interview', 'reflex', 'reason'] as const;
 export type CoachMode = (typeof COACH_MODES)[number];
 
 export const learnerProfile = pgTable('learner_profile', {
