@@ -105,8 +105,8 @@ export async function listDrill(db: Db, limit = DRILL_LIMIT_DEFAULT): Promise<{ 
   // Gộp hai bảng rồi mới cắt: mỗi bảng lấy tối đa `limit` để không bỏ sót item
   // đến hạn sớm, nhưng tổng trả về vẫn đúng `limit`.
   items.sort((a, b) => {
-    const at = a.nextReview ? Date.parse(a.nextReview) : 0;
-    const bt = b.nextReview ? Date.parse(b.nextReview) : 0;
+    const at = a.nextReview ? Date.parse(a.nextReview) : Number.POSITIVE_INFINITY;
+    const bt = b.nextReview ? Date.parse(b.nextReview) : Number.POSITIVE_INFINITY;
     if (at !== bt) return at - bt;
     return b.count - a.count;
   });

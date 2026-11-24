@@ -83,7 +83,7 @@ export function trimTranscript(
     h += t.text.length;
   }
   let tl = 0;
-  for (let i = turns.length - 1; i >= 0; i--) {
+  for (let i = turns.length - 1; i >= head.length; i--) {
     const t = turns[i]!;
     if (tl + t.text.length > tailBudget) break;
     tail.unshift(t);

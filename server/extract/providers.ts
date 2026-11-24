@@ -4,6 +4,22 @@
 
 import { extractionJsonSchema } from './schema.js';
 
+/** Gemini không chấp nhận `additionalProperties` trong responseSchema. */
+function stripAdditionalProperties(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripAdditionalProperties);
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (k === 'additionalProperties') continue;
+      out[k] = stripAdditionalProperties(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+const geminiExtractionSchema = stripAdditionalProperties(extractionJsonSchema);
+
 export type ExtractProvider = 'groq' | 'gemini';
 
 export interface ProviderCall {
@@ -22,6 +38,12 @@ export interface ProviderResult {
 }
 
 export const GROQ_MODEL = 'openai/gpt-oss-120b';
+/** Fallback khi model chính 404/429/5xx thay model cho tài khoản mới. */
+export const GROQ_FALLBACKS = [
+  'openai/gpt-oss-120b',
+  'qwen/qwen3.8-27b',
+  'openai/gpt-oss-20b',
+];
 export const GEMINI_EXTRACT_MODEL = 'gemini-3.8-flash';
 /** Model text dự phòng, thử lần lượt khi model trước 404/429/5xx. */
 export const GEMINI_EXTRACT_FALLBACKS = [
@@ -30,7 +52,7 @@ export const GEMINI_EXTRACT_FALLBACKS = [
   'gemini-3.6-flash',
   'gemini-flash-latest',
 ];
-/** 404 = model đã bị gỡ cho tài khoản mới; 429/5xx = tạm thời. Cả hai đều thử model kế. */
+/** 404 = model đã bị gỡ cho tài khoản mới; 429/5xx = tạm thời. Dùng cho cả Groq và Gemini. */
 const SKIP_STATUS = new Set([404, 429, 500, 502, 503, 504]);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -48,40 +70,54 @@ export function parseJsonLoose(text: string): unknown {
 }
 
 async function callGroq(call: ProviderCall): Promise<ProviderResult> {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${call.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      temperature: 0.2,
-      max_tokens: 3000,
-      reasoning_effort: 'low',
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'extraction', strict: true, schema: extractionJsonSchema },
-      },
-      messages: [
-        { role: 'system', content: call.system },
-        { role: 'user', content: call.prompt },
-      ],
-    }),
-    signal: call.signal,
-  });
+  const preferred = call.model || GROQ_MODEL;
+  const models = [preferred, ...GROQ_FALLBACKS.filter((m) => m !== preferred)];
+  let last: unknown = null;
 
-  if (!res.ok) {
-    throw new ProviderError(`Groq ${res.status}: ${(await res.text()).slice(0, 300)}`, res.status);
+  for (const model of models) {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${call.apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.2,
+        max_tokens: 3000,
+        reasoning_effort: 'low',
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'extraction', strict: true, schema: extractionJsonSchema },
+        },
+        messages: [
+          { role: 'system', content: call.system },
+          { role: 'user', content: call.prompt },
+        ],
+      }),
+      signal: call.signal,
+    });
+
+    if (!res.ok) {
+      const detail = (await res.text()).slice(0, 200);
+      last = new ProviderError(`Groq ${res.status} (${model}): ${detail}`, res.status);
+      if (!SKIP_STATUS.has(res.status)) throw last;
+      continue;
+    }
+
+    const body = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+      usage?: { total_tokens?: number };
+    };
+    const text = body.choices?.[0]?.message?.content;
+    if (!text) {
+      last = new ProviderError(`Groq trả về rỗng (${model})`);
+      continue;
+    }
+    return { text, model, tokens: body.usage?.total_tokens ?? 0 };
   }
 
-  const body = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
-    usage?: { total_tokens?: number };
-  };
-  const text = body.choices?.[0]?.message?.content;
-  if (!text) throw new ProviderError('Groq trả về rỗng');
-  return { text, model: GROQ_MODEL, tokens: body.usage?.total_tokens ?? 0 };
+  throw last ?? new ProviderError('Groq: mọi model đều fail');
 }
 
 async function callGemini(call: ProviderCall): Promise<ProviderResult> {
@@ -105,7 +141,7 @@ async function callGemini(call: ProviderCall): Promise<ProviderResult> {
             temperature: 0.2,
             maxOutputTokens: 2000,
             responseMimeType: 'application/json',
-            responseSchema: extractionJsonSchema,
+            responseSchema: geminiExtractionSchema,
           },
         }),
         signal: call.signal,

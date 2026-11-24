@@ -317,7 +317,8 @@ export class LiveSession {
 
   private resample(input: Float32Array, inRate: number): Float32Array {    if (inRate === 16000) return input;
     const ratio = inRate / 16000;
-    const out = new Float32Array(Math.max(1, Math.floor((input.length - this.rsPhase) / ratio)));
+    const outLen = Math.ceil((input.length - this.rsPhase) / ratio);
+    const out = new Float32Array(Math.max(1, outLen > 0 ? outLen : 1));
     let pos = this.rsPhase;
     let n = 0;
     while (pos < input.length && n < out.length) {
