@@ -43,6 +43,13 @@
       "when": 1795217727630,
       "tag": "0005_reflex_mode_and_latency",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795526276657,
+      "tag": "0006_reason_mode",
+      "breakpoints": true
     }
   ]
 }

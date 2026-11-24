@@ -53,6 +53,7 @@ function setCookieOf(res: Response): string {
 
 const db = getDb();
 let sessionId: number | null = null;
+let reasonSessionId: number | null = null;
 let originalProfile: string | null = null;
 let audioSec = 0;
 
@@ -256,6 +257,20 @@ try {
   // 15. mistake không tồn tại → 404
   const del = await call('/api/mistakes/999999999', { method: 'DELETE' }, cookie);
   check('xoá mistake lạ → 404', del.status === 404);
+
+  // 16. reason là giá trị hợp lệ ở cả enum lẫn CHECK constraint của DB.
+  const reasonStart = await call(
+    '/api/session/start',
+    { method: 'POST', body: JSON.stringify({ mode: 'ptt', coach: 'reason', topic: 'defend a decision with numbers' }) },
+    cookie,
+  );
+  const reasonBody = await reasonStart.json();
+  reasonSessionId = reasonBody?.session_id ?? null;
+  check(
+    'session/start chấp nhận coach: reason',
+    reasonStart.status === 200 && Number.isInteger(reasonSessionId) && String(reasonBody.brief).includes('You are my reasoning coach'),
+    `status=${reasonStart.status} id=${reasonSessionId} body=${JSON.stringify(reasonBody).slice(0, 400)}`,
+  );
 } catch (error) {
   check('không có exception', false, error instanceof Error ? error.message : String(error));
 } finally {
@@ -267,6 +282,11 @@ try {
     await db.delete(turns).where(eq(turns.sessionId, sessionId));
     await db.delete(sessions).where(eq(sessions.id, sessionId));
     console.log(`cleaned up session ${sessionId}`);
+  }
+  if (reasonSessionId) {
+    await db.delete(turns).where(eq(turns.sessionId, reasonSessionId));
+    await db.delete(sessions).where(eq(sessions.id, reasonSessionId));
+    console.log(`cleaned up reason session ${reasonSessionId}`);
   }
   for (const r of await db.select({ pattern: mistakes.pattern, count: mistakes.count }).from(mistakes)) {
     const before = beforeMistakes.get(r.pattern);

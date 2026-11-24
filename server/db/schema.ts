@@ -90,7 +90,7 @@ export const sessions = pgTable('sessions', {
   index('sessions_search_idx').using('gin', t.search),
   index('sessions_started_at_idx').on(t.startedAt),
   check('sessions_mode_check', sql`${t.mode} is null or ${t.mode} in ('duplex', 'ptt')`),
-  check('sessions_coach_mode_check', sql`${t.coachMode} in ('coach', 'interview', 'reflex')`),
+  check('sessions_coach_mode_check', sql`${t.coachMode} in ('coach', 'interview', 'reflex', 'reason')`),
   check('sessions_status_check', sql`${t.status} in ('active', 'ended', 'abandoned')`),
 ]);
 
