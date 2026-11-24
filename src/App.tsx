@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, ApiError, type CoachMode, type ContextResult, type DrillItem, type EndResult, type SessionDetail, type SessionListItem, type StartResult, type TurnEvent } from './api';
+import { api, ApiError, isCoachMode, type CoachMode, type ContextResult, type DrillItem, type EndResult, type SessionDetail, type SessionListItem, type StartResult, type TurnEvent } from './api';
 import { LiveSession, type LiveStatus } from './live';
 import { probeMicrophone, type MicProbe } from './mic';
 
@@ -183,13 +183,23 @@ function Home({
           >
             Phản xạ (20 giây)
           </button>
+          <button
+            type="button"
+            className={coach === 'reason' ? 'primary' : 'chip'}
+            aria-pressed={coach === 'reason'}
+            onClick={() => setCoach('reason')}
+          >
+            Reason
+          </button>
         </div>
         <p className="hint">
-          {coach === 'interview'
-            ? 'AI giữ vai người phỏng vấn: không sửa lỗi, hỏi tiếp, phản hồi gom ở phút thứ 8.'
-            : coach === 'reflex'
-              ? 'Hỏi nhanh, đáp trong 20 giây; AI cắt lời nếu bạn kể chuyện. Cuối buổi trả 3 câu dở nhất.'
-              : 'AI sửa tối đa 2 lỗi mỗi lượt, đúng định dạng sai → đúng → lý do.'}
+          {coach === 'reason'
+            ? 'Structure: frame your point, support it, keep the conversation going.'
+            : coach === 'interview'
+              ? 'AI giữ vai người phỏng vấn: không sửa lỗi, hỏi tiếp, phản hồi gom ở phút thứ 8.'
+              : coach === 'reflex'
+                ? 'Hỏi nhanh, đáp trong 20 giây; AI cắt lời nếu bạn kể chuyện. Cuối buổi trả 3 câu dở nhất.'
+                : 'AI sửa tối đa 2 lỗi mỗi lượt, đúng định dạng sai → đúng → lý do.'}
         </p>
         <div className="row">
           <button className="primary" onClick={() => onStart('duplex', topic.trim() || undefined, coach)}>
@@ -377,7 +387,7 @@ function Session({ onFinished }: { onFinished: () => void }) {
       startRef.current ??= api.start(
         duplex ? 'duplex' : 'ptt',
         sessionStorage.getItem('topic') || undefined,
-        storedCoach === 'interview' || storedCoach === 'reflex' ? storedCoach : 'coach',
+        isCoachMode(storedCoach) ? storedCoach : 'coach',
       );
       const started = await startRef.current;
       if (cancelled) return;
