@@ -79,7 +79,7 @@ These are the design targets from the spec (and the added `reason` target), with
 | G2 | Perceived latency ≤ 1.5 s | p50 `first audio` after the user stops talking, in push-to-talk | Spike: 8 turns / 117 s audio / ~1.5K tokens / 0 errors. VAD silence threshold 1300 ms. |
 | G3 | AI remembers old mistakes | Session N+1 recalls ≥ 3/5 mistakes from N without prompting | Unit tests cover brief assembly, due-vocab selection and mistake patterns. |
 | G4 | Memory is visible and editable | Context tab shows the exact `sessions.brief`; profile can be edited | `/api/context`, profile `PUT`, and `verify:brief` token-budget check. |
-| G5 | Cost stays at 0 VND | No paid tier crossed in 30 days | Gemini API + Groq + Vercel Hobby (non-commercial) + Neon free. One extraction per session ≈ 2.2K tokens; Groq `gpt-oss-120b` allows 200K TPD ≈ 85–90 sessions/day. |
+| G5 | Cost stays at 0 VND | No paid tier crossed in 30 days | Gemini API + Groq backstop + Vercel Hobby (non-commercial) + Neon free. One extraction per session ≈ 2.2K tokens; Gemini `gemini-3.8-flash` is primary, and Groq `gpt-oss-120b` backstop allows 200K TPD ≈ 85–90 sessions/day. |
 | G6 | AI does not cut in | `early_responses = 0` over 5 minutes of continuous speech | VAD tuned to 1300 ms after measurement; socket-close and Live checks pass. |
 | G7 (`reason`) | A structured debrief after a reasoning drill | After 8 minutes: 1–5 on four axes with evidence, plus a four-sentence model answer | `verify:brief` checks rules, six-topic rotation and due-vocab weaving; one manual short session is the final check. |
 
@@ -90,7 +90,7 @@ These are the design targets from the spec (and the added `reason` target), with
 | Layer | Choice | Why |
 |---|---|---|
 | Conversation | Gemini Live API (`gemini-3.8-live`) | Full-duplex audio, ~1.5K tokens per session |
-| Extraction | Groq `openai/gpt-oss-120b` | ~3 s per session, strict JSON schema |
+| Extraction | Gemini `gemini-3.8-flash` (Groq backstop) | ~3 s per session, strict JSON schema |
 | API | Hono on Vercel Functions | One file, no framework |
 | DB | Neon Postgres + Drizzle | tsvector search, free tier, branching |
 | Client | React 19 + Vite | Audio pipeline in plain WebAudio |
@@ -100,8 +100,8 @@ These are the design targets from the spec (and the added `reason` target), with
 | Job | Primary | Fallback | Notes |
 |---|---|---|---|
 | Realtime conversation | Gemini Live `models/gemini-3.8-live` | `models/gemini-2.5-flash-native-audio-latest` | Server issues an ephemeral token; voice `Puck`; VAD 1300 ms; PCM16 mono 16 kHz in / 24 kHz out. |
-| Post-session extraction | Groq `openai/gpt-oss-120b` | `qwen/qwen3.8-27b`, `openai/gpt-oss-20b` | One strict-JSON call per session (~2.2K tokens). Skips a model on 404 / 429 / 5xx; result still goes through zod. |
-| Extraction, alternate provider | Gemini `gemini-3.8-flash` | `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-flash-latest` | Used when Groq is unavailable. One retry on 503; `additionalProperties` is stripped from the response schema for Gemini. |
+| Post-session extraction | Gemini `gemini-3.8-flash` | `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3-flash-preview`, then Groq `openai/gpt-oss-120b` → `qwen/qwen3.8-27b` → `openai/gpt-oss-20b` | One strict-JSON call per session (~2.2K tokens). Gemini retries once on 503; Groq runs only when all Gemini models fail or return invalid JSON; result still goes through zod. |
+| Extraction, diagnostics override | Groq `openai/gpt-oss-120b` | `qwen/qwen3.8-27b`, `openai/gpt-oss-20b` | Only when `provider: 'groq'` is explicit; skips a model on 404 / 429 / 5xx; `additionalProperties` is stripped from the response schema for Gemini. |
 | Recall embeddings (v2, not shipped) | — | Gemini `gemini-embedding-2` | Planned for better recall; not in production. |
 
 API keys stay on the server. The browser receives only a short-lived Live token. Model names live in `server/live/config.ts` and `server/extract/providers.ts`; changing them does not require a client change.

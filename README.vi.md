@@ -79,7 +79,7 @@ Drill là đường vào rẻ nhất: từng thẻ một, không micro. Sai thì
 | G2 | Độ trễ cảm nhận ≤ 1,5 giây | p50 `first audio` sau khi người nói dừng, ở chế độ push-to-talk | Spike: 8 lượt / 117 giây audio / ~1,5K token / 0 lỗi. Ngưỡng im lặng VAD 1300 ms. |
 | G3 | AI nhớ lỗi cũ | Phiên N+1 nhắc ≥ 3/5 lỗi của N không cần gợi ý | Unit test phủ dựng brief, chọn từ đến hạn và pattern lỗi. |
 | G4 | Trí nhớ nhìn thấy và sửa được | Tab Context hiện đúng `sessions.brief`; sửa được profile | `/api/context`, `PUT` profile, và kiểm tra ngân sách token của `verify:brief`. |
-| G5 | Chi phí 0đ | Không vượt free tier trong 30 ngày | Gemini API + Groq + Vercel Hobby (phi thương mại) + Neon free. Một lần trích xuất/phiên ≈ 2,2K token; Groq `gpt-oss-120b` cho 200K TPD ≈ 85–90 phiên/ngày. |
+| G5 | Chi phí 0đ | Không vượt free tier trong 30 ngày | Gemini API + Groq dự phòng + Vercel Hobby (phi thương mại) + Neon free. Một lần trích xuất/phiên ≈ 2,2K token; Gemini `gemini-3.8-flash` là chính, còn Groq `gpt-oss-120b` dự phòng cho 200K TPD ≈ 85–90 phiên/ngày. |
 | G6 | AI không cắt lời | `early_responses = 0` trong 5 phút nói liên tục | VAD chỉnh 1300 ms sau đo đạc; socket-close và Live checks đều pass. |
 | G7 (`reason`) | Debrief có cấu trúc sau phiên lập luận | Sau 8 phút: 1–5 trên 4 trục kèm bằng chứng, cộng một câu mẫu 4 câu | `verify:brief` kiểm RULES, xoay 6 chủ đề và luồn từ đến hạn; bước cuối là chạy thủ công 1 phiên ngắn. |
 
@@ -90,7 +90,7 @@ Drill là đường vào rẻ nhất: từng thẻ một, không micro. Sai thì
 | Lớp | Chọn | Vì sao |
 |---|---|---|
 | Hội thoại | Gemini Live API (`gemini-3.8-live`) | Audio full-duplex, ~1,5K token mỗi phiên |
-| Trích xuất | Groq `openai/gpt-oss-120b` | ~3 giây mỗi phiên, JSON schema nghiêm ngặt |
+| Trích xuất | Gemini `gemini-3.8-flash` (có Groq dự phòng) | ~3 giây mỗi phiên, JSON schema nghiêm ngặt |
 | API | Hono trên Vercel Functions | Một file, không framework |
 | DB | Neon Postgres + Drizzle | full-text tsvector, free tier, branching |
 | Client | React 19 + Vite | Pipeline audio bằng WebAudio thuần |
@@ -100,8 +100,8 @@ Drill là đường vào rẻ nhất: từng thẻ một, không micro. Sai thì
 | Việc | Chính | Dự phòng | Ghi chú |
 |---|---|---|---|
 | Hội thoại realtime | Gemini Live `models/gemini-3.8-live` | `models/gemini-2.5-flash-native-audio-latest` | Server cấp ephemeral token; giọng `Puck`; VAD 1300 ms; PCM16 mono 16 kHz vào / 24 kHz ra. |
-| Trích xuất sau phiên | Groq `openai/gpt-oss-120b` | `qwen/qwen3.8-27b`, `openai/gpt-oss-20b` | Một call JSON nghiêm ngặt mỗi phiên (~2,2K token). Bỏ model khi 404 / 429 / 5xx; kết quả vẫn qua zod. |
-| Trích xuất, provider khác | Gemini `gemini-3.8-flash` | `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-flash-latest` | Dùng khi Groq không khả dụng. Thử lại một lần với 503; bỏ `additionalProperties` khỏi response schema cho Gemini. |
+| Trích xuất sau phiên | Gemini `gemini-3.8-flash` | `gemini-3.7-flash`, `gemini-3.6-flash`, `gemini-3-flash-preview`, rồi Groq `openai/gpt-oss-120b` → `qwen/qwen3.8-27b` → `openai/gpt-oss-20b` | Một call JSON nghiêm ngặt mỗi phiên (~2,2K token). Gemini thử lại một lần với 503; Groq chỉ chạy khi mọi model Gemini fail hoặc trả JSON sai schema; kết quả vẫn qua zod. |
+| Trích xuất, override khi chẩn đoán | Groq `openai/gpt-oss-120b` | `qwen/qwen3.8-27b`, `openai/gpt-oss-20b` | Chỉ khi truyền rõ `provider: 'groq'`; bỏ model khi 404 / 429 / 5xx; bỏ `additionalProperties` khỏi response schema cho Gemini. |
 | Embedding recall (v2, chưa ship) | — | Gemini `gemini-embedding-2` | Dự định cho recall tốt hơn; chưa chạy production. |
 
 API key chỉ nằm trên server. Trình duyệt chỉ nhận token Live có hạn ngắn. Tên model nằm ở `server/live/config.ts` và `server/extract/providers.ts`; đổi model không cần đổi client.
