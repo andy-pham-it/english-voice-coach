@@ -63,23 +63,38 @@ export async function extractTranscript(
   const prompt = buildExtractPrompt(trimmed, context);
   const chosen = pickProvider(options.provider);
 
-  const { text, model, tokens } = await callProvider({
-    provider: chosen.provider,
-    model: options.model ?? chosen.model ?? '',
-    system: EXTRACT_SYSTEM,
-    prompt,
-    apiKey: chosen.apiKey,
-    signal: options.signal,
-  });
-
-  const parsed = extractionSchema.safeParse(parseJsonLoose(text));
-  if (!parsed.success) {
-    throw new Error(
-      `LLM trả JSON sai schema — ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
-    );
+  const candidates: Array<{ provider: ExtractProvider; apiKey: string; model?: string }> = [chosen];
+  if (chosen.provider === 'gemini') {
+    const groqKey = env().GROQ_API_KEY;
+    if (groqKey) candidates.push({ provider: 'groq', apiKey: groqKey });
   }
 
-  return { extraction: parsed.data, provider: chosen.provider, model, tokens };
+  let lastError: unknown = new Error('No extraction provider available');
+  for (const [index, candidate] of candidates.entries()) {
+    const model = index === 0 ? (options.model ?? candidate.model ?? '') : (candidate.model ?? '');
+    try {
+      const { text, model: resultModel, tokens } = await callProvider({
+        provider: candidate.provider,
+        model,
+        system: EXTRACT_SYSTEM,
+        prompt,
+        apiKey: candidate.apiKey,
+        signal: options.signal,
+      });
+
+      const parsed = extractionSchema.safeParse(parseJsonLoose(text));
+      if (!parsed.success) {
+        throw new Error(
+          `LLM trả JSON sai schema — ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`,
+        );
+      }
+
+      return { extraction: parsed.data, provider: candidate.provider, model: resultModel, tokens };
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 export interface ApplyResult {
