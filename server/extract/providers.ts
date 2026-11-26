@@ -50,7 +50,7 @@ export const GEMINI_EXTRACT_FALLBACKS = [
   'gemini-3.8-flash',
   'gemini-3.7-flash',
   'gemini-3.6-flash',
-  'gemini-flash-latest',
+  'gemini-3-flash-preview',
 ];
 /** 404 = model đã bị gỡ cho tài khoản mới; 429/5xx = tạm thời. Dùng cho cả Groq và Gemini. */
 const SKIP_STATUS = new Set([404, 429, 500, 502, 503, 504]);

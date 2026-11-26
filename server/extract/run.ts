@@ -37,7 +37,7 @@ export interface ExtractOptions {
   signal?: AbortSignal;
 }
 
-/** Chọn provider theo env: có GROQ_API_KEY thì dùng Groq, không thì Gemini. */
+/** Chọn provider theo env: mặc định Gemini; groq chỉ khi được yêu cầu rõ ràng. */
 export function pickProvider(explicit?: ExtractProvider): { provider: ExtractProvider; apiKey: string; model?: string } {
   const e = env();
   if (explicit === 'gemini') {
@@ -47,7 +47,6 @@ export function pickProvider(explicit?: ExtractProvider): { provider: ExtractPro
     if (!e.GROQ_API_KEY) throw new Error('Thiếu GROQ_API_KEY để chạy provider groq');
     return { provider: 'groq', apiKey: e.GROQ_API_KEY };
   }
-  if (e.GROQ_API_KEY) return { provider: 'groq', apiKey: e.GROQ_API_KEY };
   return { provider: 'gemini', apiKey: e.GEMINI_API_KEY, model: GEMINI_EXTRACT_MODEL };
 }
 
