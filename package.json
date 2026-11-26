@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "@hono/node-server": "^1.19.11",
     "@neon/config": "^1.11.3",
     "@neon/env": "^1.6.15",
     "@neondatabase/serverless": "^1.2.0",
@@ -7,6 +8,7 @@
     "hono": "^4.13.16",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "tsx": "^4.23.15",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -18,7 +20,6 @@
     "@vitejs/plugin-react": "^6.2.1",
     "drizzle-kit": "^0.31.11",
     "pg": "^8.23.1",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.6",
     "vitest": "^5.1.0"
@@ -48,7 +49,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:schedule": "tsx tools/verify-schedule.ts",
-    "verify:drill": "tsx tools/verify-drill.ts"
+    "verify:drill": "tsx tools/verify-drill.ts",
+    "start:node": "tsx server/node.ts"
   },
   "engines": {
     "node": "22.x"
