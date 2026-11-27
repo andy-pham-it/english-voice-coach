@@ -193,6 +193,17 @@ export function dueVocabQuery(db: Db, limit = 5) {
     .limit(limit);
 }
 
+/**
+ * Cụm đến hạn được luyện ở mọi chế độ: AI làm mẫu rồi mở chỗ để người học
+ * tự dùng lại, không biến cụm thành bài kiểm tra chính tả. Ngắn để vẫn nằm
+ * trong ngân sách 80 token của phần `today`.
+ */
+export function reviewLineFor(_coach: CoachMode, dueVocab: { phrase: string }[]): string | null {
+  if (!dueVocab.length) return null;
+  const chunks = dueVocab.slice(0, 2).map((v) => `"${v.phrase}"`).join(', ');
+  return `Model each chunk once; ask me to reuse one: ${chunks}. If misused, recast only that chunk; no spelling quiz.`;
+}
+
 /** State: lỗi lặp lại, cụm từ đến hạn, số liệu tuần. Không bao giờ do LLM viết. */
 export function renderState(
   rows: StateRow,
@@ -350,12 +361,7 @@ export async function composeBrief(db: Db, options?: Partial<ComposeOptions>): P
   const interview = coach === 'interview';
   const reflex = coach === 'reflex';
   const reason = coach === 'reason';
-  const reviewLine =
-    (interview || reflex || reason) && dueVocab.length
-      ? // Ở vai phỏng vấn, cụm ôn tập không được biến thành chủ đề. Cách duy nhất
-        // để cụm từ còn được luyện là để người phỏng vấn tạo chỗ dùng chúng.
-        `Create a natural chance for me to use: ${dueVocab.slice(0, 3).map((v) => `"${v.phrase}"`).join(', ')}.`
-      : null;
+  const reviewLine = reviewLineFor(coach, dueVocab);
   const today = [
     `Topic for this session: ${topic}.`,
     options?.opener ??

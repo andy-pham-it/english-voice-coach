@@ -7,6 +7,7 @@ import {
   REASON_RULES,
   REFLEX_RULES,
   RULES,
+  reviewLineFor,
   rulesFor,
 } from './brief';
 
@@ -60,5 +61,40 @@ describe('reason mode brief', () => {
     for (const [mode, rules] of allRules) {
       expect(rules.split(PACE_RULE.trim()).length - 1).toBe(1);
     }
+  });
+});
+
+describe('chunk review line', () => {
+  const chunks = [
+    { phrase: 'take responsibility for' },
+    { phrase: 'make a decision' },
+  ];
+
+  it('asks every coach mode to model and reuse due chunks', () => {
+    for (const [mode] of allRules) {
+      const line = reviewLineFor(mode, chunks);
+      expect(line).toContain('Model each chunk');
+      expect(line).toContain('reuse');
+      expect(line).toContain('"take responsibility for"');
+      expect(line).toContain('no spelling quiz');
+    }
+  });
+
+  it('returns null when no chunk is due', () => {
+    for (const [mode] of allRules) {
+      expect(reviewLineFor(mode, [])).toBeNull();
+    }
+  });
+
+  it('caps at two chunks and stays inside the today budget', () => {
+    const line = reviewLineFor('interview', [
+      { phrase: 'take responsibility for' },
+      { phrase: 'make a decision' },
+      { phrase: 'on the same page' },
+    ]);
+    expect(line).toContain('"take responsibility for"');
+    expect(line).toContain('"make a decision"');
+    expect(line).not.toContain('on the same page');
+    expect(estimateTokens(line ?? '')).toBeLessThanOrEqual(40);
   });
 });

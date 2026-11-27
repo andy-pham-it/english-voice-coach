@@ -67,8 +67,13 @@ check(
   brief.text.slice(brief.text.indexOf('<today>'), brief.text.indexOf('</today>')).replace(/\n/g, ' | '),
 );
 check(
-  'interview có nhắc cụm đến hạn ở dạng lời mời dùng',
-  brief.text.includes('Create a natural chance for me to use'),
+  'interview có nhắc cụm đến hạn để tự dùng lại',
+  brief.text.includes('Model each chunk once; ask me to reuse one'),
+);
+check(
+  'today interview ≤ 80 token',
+  estimateTokens(brief.parts.today) <= SECTION_BUDGET.today,
+  `${estimateTokens(brief.parts.today)} / ${SECTION_BUDGET.today}`,
 );
 
 // deriveTopic phải rẽ nhánh theo vai, không chỉ đổi rules.
@@ -96,8 +101,13 @@ check('brief reflex ≤ 1.000 token', reflexBrief.tokens <= BRIEF_BUDGET, `${ref
 const reasonBrief = await composeBrief(db, { coach: 'reason' });
 check('brief reason dùng REASON_RULES', reasonBrief.parts.rules === REASON_RULES);
 check(
-  'reason có nhắc cụm đến hạn ở dạng lời mời dùng',
-  reasonBrief.text.includes('Create a natural chance for me to use'),
+  'reason có nhắc cụm đến hạn để tự dùng lại',
+  reasonBrief.text.includes('Model each chunk once; ask me to reuse one'),
+);
+check(
+  'today reason ≤ 80 token',
+  estimateTokens(reasonBrief.parts.today) <= SECTION_BUDGET.today,
+  `${estimateTokens(reasonBrief.parts.today)} / ${SECTION_BUDGET.today}`,
 );
 check('chủ đề reason là lập luận', reasonBrief.topic.startsWith('mock reasoning on'), reasonBrief.topic);
 check('brief reason ≤ 1.000 token', reasonBrief.tokens <= BRIEF_BUDGET, `${reasonBrief.tokens}`);
