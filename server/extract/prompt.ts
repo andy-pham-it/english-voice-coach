@@ -16,7 +16,7 @@ export const EXTRACT_SYSTEM = [
   '6. `note` explains the rule in Vietnamese, at most 12 words.',
   `7. Return at most ${MAX_CORRECTIONS} corrections, most impactful first. Do not pad the list.`,
   '8. Never comment on pronunciation, accent, speed or confidence.',
-  `9. \`new_phrases\`: at most ${MAX_NEW_PHRASES} short phrases the LEARNER used correctly and should reuse. Not phrases the AI said.`,
+  `9. \`new_phrases\`: at most ${MAX_NEW_PHRASES} chunks the LEARNER used correctly and should reuse. Each has \`en\` (the phrase) and \`vi\` (a short Vietnamese gloss). Not phrases the AI said.`,
   '10. `topic` and `summary` are in English; `summary` is 2-3 sentences about what was discussed, not about errors.',
   '11. If the learner made no clear error, return an empty corrections array. That is a valid answer.',
   '12. `tomorrow`: up to 3 complete English sentences the learner can say at work tomorrow, each rewritten from a real mistake in the transcript — not grammar explanations, not new topics.',

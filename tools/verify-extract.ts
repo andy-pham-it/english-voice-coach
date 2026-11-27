@@ -279,11 +279,12 @@ try {
     .select({ count: vocab.count, streak: vocab.streak, nextReview: vocab.nextReview })
     .from(vocab)
     .where(eq(vocab.phrase, 'push back'));
+  const fixtureChunk = { en: 'own up to the delay', vi: 'thừa nhận sự chậm trễ' };
   const fixtureExtraction = {
     topic: 'follow up on the read path',
     summary: 'Short fixture session used to check the vocabulary review dates.',
     corrections: [],
-    new_phrases: [],
+    new_phrases: [fixtureChunk],
     tomorrow: [fixtureTomorrow],
     used_phrases: ['push back'],
     fixed_patterns: [],
@@ -296,6 +297,15 @@ try {
     : null;
   const streakBefore = pushBefore[0]?.streak ?? 0;
   const expectedDays = REVIEW_LADDER_DAYS[Math.min(streakBefore, REVIEW_LADDER_DAYS.length - 1)]!;
+  const chunkRow = await db
+    .select({ example: vocab.example })
+    .from(vocab)
+    .where(eq(vocab.phrase, fixtureChunk.en));
+  check(
+    'chunk mới lưu nghĩa VI vào example',
+    chunkRow[0]?.example === fixtureChunk.vi,
+    `${chunkRow[0]?.example ?? 'null'}`,
+  );
   check('cụm đã dùng được cộng đúng 1', credited === 1, `${credited}`);
   check(
     `cụm đã dùng leo bậc ${streakBefore} → ${runOnce[0]?.streak}, hẹn ${expectedDays} ngày`,

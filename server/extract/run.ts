@@ -14,7 +14,7 @@ import { dueVocabQuery } from '../memory/brief.js';
 import { RELEARN_DAYS, scheduleReview } from '../review/schedule.js';
 import { EXTRACT_SYSTEM, buildExtractPrompt, trimTranscript, type TranscriptTurn } from './prompt.js';
 import { parseJsonLoose, callProvider, GEMINI_EXTRACT_MODEL, type ExtractProvider } from './providers.js';
-import { extractionSchema, type Correction, type Extraction, type TomorrowPhrase } from './schema.js';
+import { extractionSchema, type Correction, type Extraction, type NewPhrase, type TomorrowPhrase } from './schema.js';
 
 export interface ExtractRun {
   extraction: Extraction;
@@ -35,6 +35,18 @@ export interface ExtractOptions {
   provider?: ExtractProvider;
   model?: string;
   signal?: AbortSignal;
+}
+
+/** `example` là mặt trước tiếng Việt trong Drill, nên nghĩa của chunk được lưu ở đó. */
+export function newPhraseVocabValues(phrase: NewPhrase, streak: number, now: Date) {
+  const s = scheduleReview(now, 'correct', streak);
+  return {
+    phrase: phrase.en,
+    example: phrase.vi,
+    count: 1,
+    streak: s.streak,
+    nextReview: s.nextReview,
+  };
 }
 
 /** Chọn provider theo env: mặc định Gemini; groq chỉ khi được yêu cầu rõ ràng. */
@@ -151,7 +163,7 @@ export async function applyExtraction(
   // Pattern vừa bị sửa trong phiên này thì vẫn tính là lỗi tái phát, không tính
   // là đã sửa — nếu không, một câu sai rồi tự sửa sẽ được thưởng oan.
   const fixedPatterns = extraction.fixed_patterns.filter((p) => !correctionPatterns.includes(p));
-  const vocabPhrases = [...new Set([...extraction.new_phrases, ...extraction.used_phrases])];
+  const vocabPhrases = [...new Set([...extraction.new_phrases.map((p) => p.en), ...extraction.used_phrases])];
 
   const mistakeStreak = new Map<string, number>();
   if (correctionPatterns.length || fixedPatterns.length) {
@@ -211,15 +223,21 @@ export async function applyExtraction(
       .where(eq(mistakes.pattern, pattern));
   }
 
-  // Cụm từ tốt người học tự dùng đúng: cũng leo bậc như trên.
+  // Cụm từ tốt người học tự dùng đúng: cũng leo bậc như trên. Nghĩa VI đi vào
+  // `example` để Drill hiện nghĩa ở mặt trước và chờ người học nhớ cụm EN.
   for (const phrase of extraction.new_phrases) {
-    const s = scheduleReview(now, 'correct', vocabStreak.get(phrase) ?? 0);
+    const values = newPhraseVocabValues(phrase, vocabStreak.get(phrase.en) ?? 0, now);
     await db
       .insert(vocab)
-      .values({ phrase, count: 1, streak: s.streak, nextReview: s.nextReview })
+      .values(values)
       .onConflictDoUpdate({
         target: vocab.phrase,
-        set: { count: sql`${vocab.count} + 1`, streak: s.streak, nextReview: s.nextReview },
+        set: {
+          example: sql`coalesce(${vocab.example}, ${values.example})`,
+          count: sql`${vocab.count} + 1`,
+          streak: values.streak,
+          nextReview: values.nextReview,
+        },
       });
   }
 

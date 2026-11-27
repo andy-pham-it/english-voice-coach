@@ -299,11 +299,14 @@ Một call text LLM, input là toàn bộ transcript (đã cắt còn 6.000 ký 
       "pattern": "past_tense",
       "note": "yesterday → past simple" }
   ],
-  "new_phrases": ["more work than expected", "push back on the estimate"]
+  "new_phrases": [
+    { "en": "more work than expected", "vi": "nhiều việc hơn dự kiến" },
+    { "en": "push back on the estimate", "vi": "phản đối con số ước lượng" }
+  ]
 }
 ```
 
-Quy tắc: tối đa 5 correction/phiên, chỉ lỗi ảnh hưởng nghĩa hoặc lặp lại từ State. Không bịa lỗi nếu câu đúng. Không chấm phát âm.
+Quy tắc: tối đa 5 correction/phiên, chỉ lỗi ảnh hưởng nghĩa hoặc lặp lại từ State. Không bịa lỗi nếu câu đúng. Không chấm phát âm. Mỗi `new_phrases` là một cụm `{ en, vi }`; nghĩa VI lưu vào `vocab.example` để Drill hỏi nghĩa trước, trả cụm EN sau.
 
 Ghi DB bằng `insert ... on conflict (pattern) do update set count = count + 1, last_seen = now()`. Mỗi loại lỗi một dòng — `count` mới là thứ có nghĩa.
 

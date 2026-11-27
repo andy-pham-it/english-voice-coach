@@ -316,7 +316,7 @@ export async function endSession(
         pattern: c.pattern,
         note: c.note ?? '',
       })),
-      phrases: result.extraction.new_phrases,
+      phrases: result.extraction.new_phrases.map((p) => p.en),
       tomorrow: result.extraction.tomorrow,
       latency,
     };

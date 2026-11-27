@@ -236,7 +236,7 @@ export function createApp() {
         summary: result.extraction.summary,
         corrections: result.corrections,
         items: result.extraction.corrections,
-        phrases: result.extraction.new_phrases,
+        phrases: result.extraction.new_phrases.map((p) => p.en),
         tomorrow: result.extraction.tomorrow,
       });
     } catch (error) {

@@ -9,7 +9,7 @@ vi.mock('./providers', async (importOriginal) => {
 });
 
 import { GEMINI_EXTRACT_FALLBACKS } from './providers';
-import { extractTranscript, pickProvider } from './run';
+import { extractTranscript, newPhraseVocabValues, pickProvider } from './run';
 
 beforeEach(() => {
   mocks.env.mockReturnValue({
@@ -40,6 +40,22 @@ describe('Gemini extraction chain', () => {
       'gemini-3.6-flash',
       'gemini-3-flash-preview',
     ]);
+  });
+});
+
+describe('newPhraseVocabValues', () => {
+  it('stores the Vietnamese gloss as the drill front for a new chunk', () => {
+    const values = newPhraseVocabValues(
+      { en: 'take responsibility for', vi: 'chịu trách nhiệm về' },
+      0,
+      new Date('2026-11-27T00:00:00.000Z'),
+    );
+
+    expect(values).toMatchObject({
+      phrase: 'take responsibility for',
+      example: 'chịu trách nhiệm về',
+      count: 1,
+    });
   });
 });
 

@@ -27,11 +27,17 @@ export const tomorrowSchema = z.object({
   tag: z.enum(TOMORROW_TAGS),
 });
 
+/** Cụm collocation người học dùng đúng, kèm nghĩa tiếng Việt để ôn nhận diện. */
+export const newPhraseSchema = z.object({
+  en: z.string().min(2).max(80),
+  vi: z.string().min(2).max(120),
+});
+
 export const extractionSchema = z.object({
   topic: z.string().min(3).max(120),
   summary: z.string().min(10).max(600),
   corrections: z.array(correctionSchema).max(MAX_CORRECTIONS).default([]),
-  new_phrases: z.array(z.string().min(2).max(80)).max(MAX_NEW_PHRASES).default([]),
+  new_phrases: z.array(newPhraseSchema).max(MAX_NEW_PHRASES).default([]),
   tomorrow: z.array(tomorrowSchema).max(MAX_TOMORROW).default([]),
   used_phrases: z.array(z.string().min(2).max(120)).max(5).default([]),
   /**
@@ -44,6 +50,7 @@ export const extractionSchema = z.object({
 
 export type Correction = z.infer<typeof correctionSchema>;
 export type TomorrowPhrase = z.infer<typeof tomorrowSchema>;
+export type NewPhrase = z.infer<typeof newPhraseSchema>;
 export type Extraction = z.infer<typeof extractionSchema>;
 
 /**
@@ -74,7 +81,15 @@ export const extractionJsonSchema = {
     new_phrases: {
       type: 'array',
       maxItems: MAX_NEW_PHRASES,
-      items: { type: 'string', description: 'Cụm từ tự nhiên người học đã dùng đúng và nên giữ lại' },
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          en: { type: 'string', maxLength: 80, description: 'Cụm collocation tự nhiên người học đã dùng đúng' },
+          vi: { type: 'string', maxLength: 120, description: 'Nghĩa tiếng Việt, ≤ 20 từ' },
+        },
+        required: ['en', 'vi'],
+      },
     },
     tomorrow: {
       type: 'array',
